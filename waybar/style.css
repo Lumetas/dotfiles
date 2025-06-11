@@ -45,7 +45,7 @@ window#waybar {
 #workspaces button:hover {
 	box-shadow: inherit;
 	text-shadow: inherit;
-	color:red;
+	border-bottom: 1px solid white;
 }
 
 #workspaces button.active{
@@ -59,8 +59,7 @@ window#waybar {
 }
 
 #workspaces button.urgent {
-	background: #af005f;
-	color: #1b1d1e;
+	border-top: 1px solid white;
 }
 
 #mode {
