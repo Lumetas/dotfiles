@@ -21,7 +21,8 @@ fi
 echo "link created";
 
 if [[ $install_utils == "yes" ]]; then
-	$installCMD git tmux wget curl lazygit;
+	$installCMD git tmux wget curl;
+	ln -s $PWD/tmux.conf ~/.tmux.conf
 	echo "utils installed!";
 fi
 

@@ -9,4 +9,8 @@ if [[ $install_nvim == "yes" ]]; then
     unlink ~/.config/nvim
 fi
 
+if [[ $install_utils == "yes" ]]; then
+	unlink ~/.tmux.conf
+fi
+
 echo "uninstalled!";
