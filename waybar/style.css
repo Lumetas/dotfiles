@@ -6,12 +6,19 @@
 	min-height: 0;
 	margin: 0px;
 }
-
 window#waybar {
-	/*background: #000000;*/
-	background: rgba(0, 0, 0, 0.7);
-	color: gray;
-	color: #ffffff;
+    background: transparent;
+    font-family: "Fira Code", "JetBrains Mono", monospace;
+}
+
+.modules-left, .modules-center, .modules-right {
+    background-color: rgba(30, 30, 46, 0.5);
+    border-radius: 12px;
+    padding: 0 12px;
+    margin: 4px;
+	color:white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
 }
 
 #window {
