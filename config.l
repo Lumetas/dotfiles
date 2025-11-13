@@ -3,17 +3,17 @@ desktop=hyprland
 bar=waybar
 menu=wofi
 terminal=kitty
-shell=zsh
+// shell=fish
 
 # Список зависимостей
 dependencies="hyprland hyprlock wofi kitty waybar zsh"
 
 # Команда пакетного менеджера для установки, желательно без подтверждения
-installCMD="sudo pacman -S --noconfirm"
+// installCMD="sudo dnf install -y"
 # Для тестов, чтобы не устанавливать пакеты
-# installCMD="echo"
+ installCMD="echo"
 
 # Блок необязательных установок
 install_utils="yes"
-install_nvim="yes"
+install_nvim="no"
 install_term_file_manager="yazi" # "no" or "name"
