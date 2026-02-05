@@ -1,0 +1,17 @@
+#!/bin/bash
+# resume-all-suspended.sh
+
+# Находим все файлы с суспендеными PID'ами
+for pid_file in /tmp/hypr_suspended_pids_*; do
+    if [[ -f "$pid_file" ]]; then
+        echo "Возобновление из: $pid_file"
+        while read pid; do
+            if kill -CONT "$pid" 2>/dev/null; then
+                echo "Возобновлен PID: $pid"
+            fi
+        done < "$pid_file"
+        rm -f "$pid_file"
+    fi
+done
+
+echo "Все суспенденые процессы возобновлены"

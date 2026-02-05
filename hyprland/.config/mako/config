@@ -1,0 +1,22 @@
+
+# Расположение
+anchor=top-right
+width=350
+height=100
+margin=10
+padding=15
+layer=overlay
+
+# Внешний вид
+background-color=#282828CC
+text-color=#ebdbb2
+border-color=#458588
+border-size=2
+# border-radius=10 # Красивые закругленные углы
+
+# Шрифт
+font=Fira Code 11
+
+# Поведение
+format=<b>%s</b>\n%b
+
