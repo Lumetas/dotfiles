@@ -1,0 +1,20 @@
+[urgency_low]
+    # Минималистичный черный фон, белый текст
+    background = "#000000"
+    foreground = "#FFFFFF"
+    frame_color = "#000000"
+    timeout = 3
+
+[urgency_normal]
+    # Минималистичный черный фон, белый текст
+    background = "#000000"
+    foreground = "#FFFFFF"
+    frame_color = "#FFFFFF"
+    timeout = 6
+
+[urgency_critical]
+    # Черный фон, красный (или белый) текст, чтобы выделить важность
+    background = "#000000"
+    foreground = "#FF0000"
+    frame_color = "#FF0000"
+    timeout = 10
