@@ -1,79 +1,195 @@
-#!/bin/env php
-<?php
+#!/usr/bin/env python3
 
-function enabler($elements)
-{
-	$enabled = [];
-	foreach ($elements as $element => $elementData) {
-		if ($elementData['active']) {
-			$enabled[$element] = $elementData;
-		} else {
-			shell_exec("stow -D $element");
-		}
-	}
+import os
+import sys
+import json
+import subprocess
+import shlex
 
-	foreach ($enabled as $element => $elementData) {
-		if ($elementData['active']) {
-			shell_exec("stow $element");
-			if (isset($elementData['build'])) {
-				shell_exec($elementData['build']);
-			}
-		}
-	}
-}
+def load_config_recursive(config, base_path=''):
+    """
+    Рекурсивно загружает конфигурацию, обрабатывая вложенные @include
+    """
+    result = {}
+    
+    for key, value in config.items():
+        # Если значение начинается с @include:, обрабатываем как инклюд
+        if isinstance(value, str) and value.startswith('@include:'):
+            include_file = value[len('@include:'):]
+            
+            # Если путь относительный, добавляем базовый путь
+            if base_path and not include_file.startswith('/'):
+                include_file = os.path.join(base_path, include_file)
+            
+            if not os.path.exists(include_file):
+                print(f"Warning: Include file not found: {include_file}")
+                continue
+            
+            try:
+                with open(include_file, 'r') as f:
+                    included_config = json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"Warning: Invalid JSON or cannot read include file: {include_file} - {e}")
+                continue
+            
+            # Рекурсивно обрабатываем включенный конфиг
+            result[key] = load_config_recursive(included_config, os.path.dirname(include_file))
+        elif isinstance(value, dict):
+            # Рекурсивно обрабатываем вложенные словари
+            result[key] = load_config_recursive(value, base_path)
+        else:
+            # Обычное значение
+            result[key] = value
+    
+    return result
 
-function disabler($elements)
-{
-	foreach ($elements as $element => $elementData) {
-		shell_exec("stow -D $element");
-	}
-}
-function uninstallExtraPkgs($config)
-{
-	if (isset($config['extraPkgs'])) {
-		$extraPkgs = $config['extraPkgs'];
-		foreach ($extraPkgs as $path => $url) {
-			if (file_exists( $path)) {
-				echo "rm -rf $path\n";
-				shell_exec("rm -rf $path");
-			}
-		}
-	}
-}
+def run_shell_command(cmd):
+    """Выполняет shell команду и возвращает результат"""
+    try:
+        result = subprocess.run(
+            cmd, 
+            shell=True, 
+            capture_output=True, 
+            text=True
+        )
+        return result.returncode, result.stdout, result.stderr
+    except Exception as e:
+        return -1, '', str(e)
 
-$config = json_decode(file_get_contents('config.json'), true);
+def enabler(elements):
+    """Включает элементы с помощью stow"""
+    enabled = {}
+    
+    for element, element_data in elements.items():
+        if isinstance(element_data, dict) and element_data.get('active', False):
+            enabled[element] = element_data
+        else:
+            # Отключаем неактивные элементы
+            returncode, stdout, stderr = run_shell_command(f"stow -D {shlex.quote(element)}")
+            if returncode != 0:
+                print(f"Warning: Failed to disable {element}: {stderr}")
+    
+    for element, element_data in enabled.items():
+        # Включаем активные элементы
+        returncode, stdout, stderr = run_shell_command(f"stow {shlex.quote(element)}")
+        if returncode != 0:
+            print(f"Warning: Failed to enable {element}: {stderr}")
+        else:
+            # Запускаем команду build если есть
+            if isinstance(element_data, dict) and 'build' in element_data:
+                build_cmd = element_data['build']
+                print(f"Running build command for {element}: {build_cmd}")
+                returncode, stdout, stderr = run_shell_command(build_cmd)
+                if returncode != 0:
+                    print(f"Warning: Build command failed for {element}: {stderr}")
 
-if (count($argv) >= 2) {
-	if ($argv[1] == 'uninstall') {
-		disabler($config['WM']);
-		disabler($config['PKGS']);
-		exit;
-	}
+def disabler(elements):
+    """Отключает элементы с помощью stow"""
+    for element, element_data in elements.items():
+        returncode, stdout, stderr = run_shell_command(f"stow -D {shlex.quote(element)}")
+        if returncode != 0:
+            print(f"Warning: Failed to disable {element}: {stderr}")
 
-	if ($argv[1] == 'remove') {
-		disabler($config['WM']);
-		disabler($config['PKGS']);
-		uninstallExtraPkgs($config);
-		exit;
-	}
-}
+def expand_path(path):
+    """Расширяет пути с ~/ до домашней директории"""
+    if path.startswith('~/'):
+        return os.path.join(os.path.expanduser('~'), path[2:])
+    return path
 
+def clone_extra_pkgs(extra_pkgs):
+    """Клонирует дополнительные пакеты из Git"""
+    for path, url in extra_pkgs.items():
+        expanded_path = expand_path(path)
+        
+        # Создаем директорию, если не существует
+        dir_path = os.path.dirname(expanded_path)
+        if not os.path.exists(dir_path):
+            try:
+                os.makedirs(dir_path, 0o755, exist_ok=True)
+            except OSError as e:
+                print(f"Warning: Failed to create directory {dir_path}: {e}")
+                continue
+        
+        if not os.path.exists(expanded_path):
+            print(f"Cloning: {url} to {expanded_path}")
+            returncode, stdout, stderr = run_shell_command(
+                f"git clone {shlex.quote(url)} {shlex.quote(expanded_path)}"
+            )
+            if returncode != 0:
+                print(f"Warning: Failed to clone {url}: {stderr}")
 
+def uninstall_extra_pkgs(config):
+    """Удаляет дополнительные пакеты"""
+    if 'extraPkgs' in config:
+        extra_pkgs = config['extraPkgs']
+        for path, url in extra_pkgs.items():
+            expanded_path = expand_path(path)
+            if os.path.exists(expanded_path):
+                print(f"Removing: {expanded_path}")
+                try:
+                    if os.path.isdir(expanded_path):
+                        import shutil
+                        shutil.rmtree(expanded_path)
+                    else:
+                        os.remove(expanded_path)
+                except OSError as e:
+                    print(f"Warning: Failed to remove {expanded_path}: {e}")
 
-if (isset($config['extraPkgs'])) {
-	$extraPkgs = $config['extraPkgs'];
-	foreach ($extraPkgs as $path => $url) {
-		if (file_exists($path)) {
-			continue;
-		}
-		shell_exec("git clone $url $path");
-	}
-}
+def show_help():
+    """Показывает справку по использованию"""
+    help_text = """Usage:
+  python3 script.py          - Install/configure packages
+  python3 script.py uninstall - Disable packages
+  python3 script.py remove    - Disable packages and remove extra files
+  python3 script.py help      - Show this help
+"""
+    print(help_text)
 
-enabler($config['WM']);
-enabler($config['PKGS']);
+def main():
+    # Загружаем основной конфиг
+    try:
+        with open('config.json', 'r') as f:
+            main_config = json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"Error: Invalid JSON or cannot read config.json: {e}")
+        sys.exit(1)
+    
+    # Рекурсивно обрабатываем инклюды
+    config = load_config_recursive(main_config, os.path.dirname('config.json'))
+    
+    # Обработка аргументов командной строки
+    if len(sys.argv) >= 2:
+        if sys.argv[1] == 'uninstall':
+            print("Uninstalling packages...")
+            if 'WM' in config:
+                disabler(config['WM'])
+            if 'PKGS' in config:
+                disabler(config['PKGS'])
+            sys.exit(0)
+        
+        if sys.argv[1] == 'remove':
+            print("Removing packages and extra files...")
+            if 'WM' in config:
+                disabler(config['WM'])
+            if 'PKGS' in config:
+                disabler(config['PKGS'])
+            uninstall_extra_pkgs(config)
+            sys.exit(0)
+        
+        if sys.argv[1] in ['help', '--help', '-h']:
+            show_help()
+            sys.exit(0)
+    
+    # Клонируем дополнительные пакеты
+    if 'extraPkgs' in config:
+        clone_extra_pkgs(config['extraPkgs'])
+    
+    # Включаем пакеты
+    if 'WM' in config:
+        enabler(config['WM'])
+    
+    if 'PKGS' in config:
+        enabler(config['PKGS'])
 
-/* if (isset($config['requiredPkgs']) && isset($config['installCmd'])) { */
-/* 	$requiredPkgs = $config['requiredPkgs']; */
-/* 	shell_exec(str_replace('%pkgs%', implode(' ', $requiredPkgs), $config['installCmd'])); */
-/* } */
+if __name__ == '__main__':
+    main()
