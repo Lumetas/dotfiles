@@ -1,17 +1,8 @@
 #!/bin/env php
 <?php
 
-$config = json_decode(file_get_contents('config.json'), true);
-
-if (isset($config['extraPkgs'])) {
-    $extraPkgs = $config['extraPkgs'];
-	foreach ($extraPkgs as $path => $url) {
-		if (file_exists($path)) { continue; }
-		shell_exec("git clone $url $path");
-	}
-}
-
-function enabler($elements) {
+function enabler($elements)
+{
 	$enabled = [];
 	foreach ($elements as $element => $elementData) {
 		if ($elementData['active']) {
@@ -31,7 +22,53 @@ function enabler($elements) {
 	}
 }
 
+function disabler($elements)
+{
+	foreach ($elements as $element => $elementData) {
+		shell_exec("stow -D $element");
+	}
+}
+function uninstallExtraPkgs($config)
+{
+	if (isset($config['extraPkgs'])) {
+		$extraPkgs = $config['extraPkgs'];
+		foreach ($extraPkgs as $path => $url) {
+			if (file_exists( $path)) {
+				echo "rm -rf $path\n";
+				shell_exec("rm -rf $path");
+			}
+		}
+	}
+}
 
+$config = json_decode(file_get_contents('config.json'), true);
+
+if (count($argv) >= 2) {
+	if ($argv[1] == 'uninstall') {
+		disabler($config['WM']);
+		disabler($config['PKGS']);
+		exit;
+	}
+
+	if ($argv[1] == 'remove') {
+		disabler($config['WM']);
+		disabler($config['PKGS']);
+		uninstallExtraPkgs($config);
+		exit;
+	}
+}
+
+
+
+if (isset($config['extraPkgs'])) {
+	$extraPkgs = $config['extraPkgs'];
+	foreach ($extraPkgs as $path => $url) {
+		if (file_exists($path)) {
+			continue;
+		}
+		shell_exec("git clone $url $path");
+	}
+}
 
 enabler($config['WM']);
 enabler($config['PKGS']);

@@ -1,7 +1,7 @@
 {
 	"extraPkgs": {
-		"dwm/dwm" : "https://github.com/lumetas/dwm.git",
-		"nvim/.config/nvim" : "https://github.com/lumetas/nvim-cfg.git"
+		"dwm/dwm" : "git@github.com:Lumetas/dwm.git",
+		"nvim/.config/nvim" : "git@github.com:Lumetas/nvim-cfg.git"
 	}, 
 
 	"WM" : {
