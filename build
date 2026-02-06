@@ -71,7 +71,10 @@ def enabler(elements):
     
     for element, element_data in enabled.items():
         # Включаем активные элементы
-        returncode, stdout, stderr = run_shell_command(f"stow {shlex.quote(element)}")
+        inDir = ""
+        if element_data.get('path'):
+            inDir = "-t " + element_data.get('path')
+        returncode, stdout, stderr = run_shell_command(f"stow {inDir} {shlex.quote(element)}")
         if returncode != 0:
             print(f"Warning: Failed to enable {element}: {stderr}")
         else:
