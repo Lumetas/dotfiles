@@ -36,7 +36,7 @@ function enabler($elements) {
 enabler($config['WM']);
 enabler($config['PKGS']);
 
-if (isset($config['requiredPkgs']) && isset($config['installCmd'])) {
-	$requiredPkgs = $config['requiredPkgs'];
-	shell_exec(str_replace('%pkgs%', implode(' ', $requiredPkgs), $config['installCmd']));
-}
+/* if (isset($config['requiredPkgs']) && isset($config['installCmd'])) { */
+/* 	$requiredPkgs = $config['requiredPkgs']; */
+/* 	shell_exec(str_replace('%pkgs%', implode(' ', $requiredPkgs), $config['installCmd'])); */
+/* } */
