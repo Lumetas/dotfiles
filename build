@@ -1,0 +1,42 @@
+#!/bin/env php
+<?php
+
+$config = json_decode(file_get_contents('config.json'), true);
+
+if (isset($config['extraPkgs'])) {
+    $extraPkgs = $config['extraPkgs'];
+	foreach ($extraPkgs as $path => $url) {
+		if (file_exists($path)) { continue; }
+		shell_exec("git clone $url $path");
+	}
+}
+
+function enabler($elements) {
+	$enabled = [];
+	foreach ($elements as $element => $elementData) {
+		if ($elementData['active']) {
+			$enabled[$element] = $elementData;
+		} else {
+			shell_exec("stow -D $element");
+		}
+	}
+
+	foreach ($enabled as $element => $elementData) {
+		if ($elementData['active']) {
+			shell_exec("stow $element");
+			if (isset($elementData['build'])) {
+				shell_exec($elementData['build']);
+			}
+		}
+	}
+}
+
+
+
+enabler($config['WM']);
+enabler($config['PKGS']);
+
+if (isset($config['requiredPkgs']) && isset($config['installCmd'])) {
+	$requiredPkgs = $config['requiredPkgs'];
+	shell_exec(str_replace('%pkgs%', implode(' ', $requiredPkgs), $config['installCmd']));
+}

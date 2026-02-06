@@ -1,0 +1,35 @@
+{
+	"extraPkgs": {
+		"dwm/dwm" : "https://github.com/lumetas/dwm.git",
+		"nvim/.config/nvim" : "https://github.com/lumetas/nvim-cfg.git"
+	}, 
+
+	"WM" : {
+		"dwm" : {
+			"active" : true,
+			"build" : "cd ~/dwm && sudo make clean install"
+		},
+		"hyprland" : {
+			"active" : false
+		}
+	},
+
+	"PKGS" : {
+		"fish" : {
+			"active" : true
+		},
+		"nvim" : {
+			"active" : true 
+		},
+		"kitty" : {
+			"active" : true
+		},
+		"wallpapers" : {
+			"active" : true
+		}
+	},
+
+
+	"requiredPkgs" : ["fish", "nvim", "kitty" ],
+	"installCmd" : "sudo dnf install -y %pkgs%"
+}
