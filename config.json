@@ -36,14 +36,6 @@
 				"enable": true,
 				"name": "sshd"
 			}
-		},
-		"open tablet driver" : {
-			"fedora": {
-				"user" : true,
-				"start": true,
-				"enable": true,
-				"name": "otd"
-			}
 		}
 	}
 }

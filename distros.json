@@ -3,7 +3,7 @@
 		"pkgs": {
 			"install": "sudo dnf install %pkg% -y",
 			"remove": "sudo dnf remove %pkg% -y",
-			"check": "rpm -q jq > /dev/null && echo 1"
+			"check": "rpm -q %pkg% > /dev/null && echo 1"
 		},
 		"services": {
 			"system": {

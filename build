@@ -56,43 +56,6 @@ def run_shell_command(cmd):
     except Exception as e:
         return -1, '', str(e)
 
-def enabler(elements):
-    """Включает элементы с помощью stow"""
-    enabled = {}
-    
-    for element, element_data in elements.items():
-        if isinstance(element_data, dict) and element_data.get('active', False):
-            enabled[element] = element_data
-        else:
-            # Отключаем неактивные элементы
-            returncode, stdout, stderr = run_shell_command(f"stow -D {shlex.quote(element)}")
-            if returncode != 0:
-                print(f"Warning: Failed to disable {element}: {stderr}")
-    
-    for element, element_data in enabled.items():
-        # Включаем активные элементы
-        inDir = ""
-        if element_data.get('path'):
-            inDir = "-t " + element_data.get('path')
-        returncode, stdout, stderr = run_shell_command(f"stow {inDir} {shlex.quote(element)}")
-        if returncode != 0:
-            print(f"Warning: Failed to enable {element}: {stderr}")
-        else:
-            # Запускаем команду build если есть
-            if isinstance(element_data, dict) and 'build' in element_data:
-                build_cmd = element_data['build']
-                print(f"Running build command for {element}: {build_cmd}")
-                returncode, stdout, stderr = run_shell_command(build_cmd)
-                if returncode != 0:
-                    print(f"Warning: Build command failed for {element}: {stderr}")
-
-def disabler(elements):
-    """Отключает элементы с помощью stow"""
-    for element, element_data in elements.items():
-        returncode, stdout, stderr = run_shell_command(f"stow -D {shlex.quote(element)}")
-        if returncode != 0:
-            print(f"Warning: Failed to disable {element}: {stderr}")
-
 def expand_path(path):
     """Расширяет пути с ~/ до домашней директории"""
     if path.startswith('~/'):
@@ -138,26 +101,12 @@ def uninstall_extra_pkgs(config):
                 except OSError as e:
                     print(f"Warning: Failed to remove {expanded_path}: {e}")
 
-def get_package_config_for_distro(pkg_config, distro):
-    """Получает конфигурацию пакета для текущего дистрибутива"""
-    if distro in pkg_config:
-        return pkg_config[distro]
-    
-    # Если нет конфигурации для текущего дистрибутива, проверяем наличие default
-    if 'default' in pkg_config:
-        return pkg_config['default']
-    
-    # Если нет ни дистрибутива, ни default, возвращаем None
-    return None
-
 def check_package_installed(pkg_name, distro_config):
     """Проверяет, установлен ли пакет"""
-    if 'checkCmd' not in distro_config:
+    if 'pkgs' not in distro_config or 'check' not in distro_config['pkgs']:
         return False
     
-    # Проблема: checkCmd использует jq как жестко закодированный пакет
-    # Нужно заменить %pkg% на реальное имя пакета
-    check_cmd = distro_config['checkCmd'].replace('jq', pkg_name).replace('%pkg%', pkg_name)
+    check_cmd = distro_config['pkgs']['check'].replace('jq', pkg_name).replace('%pkg%', pkg_name)
     returncode, stdout, stderr = run_shell_command(check_cmd)
     
     if returncode == 0 and stdout.strip() == "1":
@@ -166,11 +115,11 @@ def check_package_installed(pkg_name, distro_config):
 
 def install_package(pkg_name, distro_config):
     """Устанавливает пакет"""
-    if 'installCmd' not in distro_config:
-        print(f"Error: No install command defined for {distro_config}")
+    if 'pkgs' not in distro_config or 'install' not in distro_config['pkgs']:
+        print(f"Error: No install command defined for distro")
         return False
     
-    install_cmd = distro_config['installCmd'].replace('%pkg%', pkg_name)
+    install_cmd = distro_config['pkgs']['install'].replace('%pkg%', pkg_name)
     print(f"Installing package: {pkg_name}")
     returncode, stdout, stderr = run_shell_command(install_cmd)
     
@@ -182,11 +131,11 @@ def install_package(pkg_name, distro_config):
 
 def remove_package(pkg_name, distro_config):
     """Удаляет пакет"""
-    if 'removeCmd' not in distro_config:
-        print(f"Error: No remove command defined for {distro_config}")
+    if 'pkgs' not in distro_config or 'remove' not in distro_config['pkgs']:
+        print(f"Error: No remove command defined for distro")
         return False
     
-    remove_cmd = distro_config['removeCmd'].replace('%pkg%', pkg_name)
+    remove_cmd = distro_config['pkgs']['remove'].replace('%pkg%', pkg_name)
     print(f"Removing package: {pkg_name}")
     returncode, stdout, stderr = run_shell_command(remove_cmd)
     
@@ -222,17 +171,13 @@ def manage_packages(config):
             continue
         
         # Получаем конфигурацию пакета для текущего дистрибутива
-        pkg_distro_config = get_package_config_for_distro(pkg_config, current_distro)
+        pkg_distro_config = pkg_config.get(current_distro, pkg_config.get('default'))
         if not pkg_distro_config:
             print(f"Warning: No configuration for {pkg_key} on {current_distro}")
             continue
         
         # Получаем имя пакета и статус
-        pkg_name = pkg_distro_config.get('name')
-        if not pkg_name:
-            print(f"Warning: No package name defined for {pkg_key} on {current_distro}")
-            continue
-        
+        pkg_name = pkg_distro_config.get('name', pkg_key)
         should_be_installed = pkg_distro_config.get('installed', False)
         
         # Проверяем текущее состояние
@@ -259,13 +204,277 @@ def manage_packages(config):
             # Состояние соответствует желаемому
             print(f"Package {pkg_key} is already in correct state")
 
+def check_service_status(service_name, service_type, distro_config):
+    """Проверяет статус сервиса"""
+    if 'services' not in distro_config:
+        return False
+    
+    # Определяем тип сервиса: system или user
+    service_cmds = distro_config['services'].get('system')
+    if service_type == 'user':
+        service_cmds = distro_config['services'].get('user')
+    
+    if not service_cmds or 'enabled' not in service_cmds:
+        return False
+    
+    check_cmd = service_cmds['enabled'].replace('%service%', service_name)
+    returncode, stdout, stderr = run_shell_command(check_cmd)
+    
+    if returncode == 0 and stdout.strip() == "1":
+        return True
+    return False
+
+def check_service_running(service_name, service_type, distro_config):
+    """Проверяет, запущен ли сервис"""
+    if 'services' not in distro_config:
+        return False
+    
+    # Определяем тип сервиса: system или user
+    service_cmds = distro_config['services'].get('system')
+    if service_type == 'user':
+        service_cmds = distro_config['services'].get('user')
+    
+    if not service_cmds or 'started' not in service_cmds:
+        return False
+    
+    check_cmd = service_cmds['started'].replace('%service%', service_name)
+    returncode, stdout, stderr = run_shell_command(check_cmd)
+    
+    if returncode == 0 and stdout.strip() == "1":
+        return True
+    return False
+
+def enable_service(service_name, service_type, distro_config):
+    """Включает сервис"""
+    if 'services' not in distro_config:
+        return False
+    
+    # Определяем тип сервиса: system или user
+    service_cmds = distro_config['services'].get('system')
+    if service_type == 'user':
+        service_cmds = distro_config['services'].get('user')
+    
+    if not service_cmds or 'enable' not in service_cmds:
+        print(f"Error: No enable command for {service_type} services")
+        return False
+    
+    enable_cmd = service_cmds['enable'].replace('%service%', service_name)
+    print(f"Enabling {service_type} service: {service_name}")
+    returncode, stdout, stderr = run_shell_command(enable_cmd)
+    
+    if returncode != 0:
+        print(f"Error: Failed to enable {service_name}: {stderr}")
+        return False
+    
+    return True
+
+def disable_service(service_name, service_type, distro_config):
+    """Отключает сервис"""
+    if 'services' not in distro_config:
+        return False
+    
+    # Определяем тип сервиса: system или user
+    service_cmds = distro_config['services'].get('system')
+    if service_type == 'user':
+        service_cmds = distro_config['services'].get('user')
+    
+    if not service_cmds or 'disable' not in service_cmds:
+        print(f"Error: No disable command for {service_type} services")
+        return False
+    
+    disable_cmd = service_cmds['disable'].replace('%service%', service_name)
+    print(f"Disabling {service_type} service: {service_name}")
+    returncode, stdout, stderr = run_shell_command(disable_cmd)
+    
+    if returncode != 0:
+        print(f"Error: Failed to disable {service_name}: {stderr}")
+        return False
+    
+    return True
+
+def start_service(service_name, service_type, distro_config):
+    """Запускает сервис"""
+    if 'services' not in distro_config:
+        return False
+    
+    # Определяем тип сервиса: system или user
+    service_cmds = distro_config['services'].get('system')
+    if service_type == 'user':
+        service_cmds = distro_config['services'].get('user')
+    
+    if not service_cmds or 'start' not in service_cmds:
+        print(f"Error: No start command for {service_type} services")
+        return False
+    
+    start_cmd = service_cmds['start'].replace('%service%', service_name)
+    print(f"Starting {service_type} service: {service_name}")
+    returncode, stdout, stderr = run_shell_command(start_cmd)
+    
+    if returncode != 0:
+        print(f"Error: Failed to start {service_name}: {stderr}")
+        return False
+    
+    return True
+
+def stop_service(service_name, service_type, distro_config):
+    """Останавливает сервис"""
+    if 'services' not in distro_config:
+        return False
+    
+    # Определяем тип сервиса: system или user
+    service_cmds = distro_config['services'].get('system')
+    if service_type == 'user':
+        service_cmds = distro_config['services'].get('user')
+    
+    if not service_cmds or 'stop' not in service_cmds:
+        print(f"Error: No stop command for {service_type} services")
+        return False
+    
+    stop_cmd = service_cmds['stop'].replace('%service%', service_name)
+    print(f"Stopping {service_type} service: {service_name}")
+    returncode, stdout, stderr = run_shell_command(stop_cmd)
+    
+    if returncode != 0:
+        print(f"Error: Failed to stop {service_name}: {stderr}")
+        return False
+    
+    return True
+
+def manage_services(config):
+    """Управляет сервисами на основе декларативной конфигурации"""
+    if 'services' not in config or 'distros' not in config:
+        print("Warning: No services or distros defined in config")
+        return
+    
+    # Получаем текущий дистрибутив
+    current_distro = config.get('currentDistro')
+    if not current_distro:
+        print("Error: currentDistro not defined in config")
+        return
+    
+    # Получаем конфиг текущего дистрибутива
+    distro_config = config['distros'].get(current_distro)
+    if not distro_config:
+        print(f"Error: No configuration found for distro: {current_distro}")
+        return
+    
+    print(f"Managing services for distro: {current_distro}")
+    
+    # Обрабатываем все сервисы
+    for service_key, service_config in config['services'].items():
+        if not isinstance(service_config, dict):
+            continue
+        
+        # Получаем конфигурацию сервиса для текущего дистрибутива
+        service_distro_config = service_config.get(current_distro)
+        if not service_distro_config:
+            print(f"Warning: No configuration for {service_key} on {current_distro}")
+            continue
+        
+        # Получаем параметры сервиса
+        service_name = service_distro_config.get('name')
+        if not service_name:
+            print(f"Warning: No service name defined for {service_key}")
+            continue
+        
+        should_be_enabled = service_distro_config.get('enable', False)
+        should_be_started = service_distro_config.get('start', False)
+        is_user_service = service_distro_config.get('user', False)
+        
+        service_type = 'user' if is_user_service else 'system'
+        
+        # Проверяем текущее состояние
+        is_enabled = check_service_status(service_name, service_type, distro_config)
+        is_running = check_service_running(service_name, service_type, distro_config)
+        
+        print(f"Service: {service_key} ({service_name}, {service_type})")
+        print(f"  Should be enabled: {should_be_enabled}, Is enabled: {is_enabled}")
+        print(f"  Should be started: {should_be_started}, Is running: {is_running}")
+        
+        # Управляем состоянием включения/выключения
+        if should_be_enabled and not is_enabled:
+            # Сервис должен быть включен, но не включен
+            if not enable_service(service_name, service_type, distro_config):
+                print(f"Failed to enable {service_key}")
+            else:
+                print(f"Successfully enabled {service_key}")
+        
+        elif not should_be_enabled and is_enabled:
+            # Сервис не должен быть включен, но включен
+            if not disable_service(service_name, service_type, distro_config):
+                print(f"Failed to disable {service_key}")
+            else:
+                print(f"Successfully disabled {service_key}")
+        
+        else:
+            # Состояние включения соответствует желаемому
+            print(f"Service {service_key} enabled state is correct")
+        
+        # Управляем состоянием запуска/остановки
+        if should_be_started and not is_running:
+            # Сервис должен быть запущен, но не запущен
+            if not start_service(service_name, service_type, distro_config):
+                print(f"Failed to start {service_key}")
+            else:
+                print(f"Successfully started {service_key}")
+        
+        elif not should_be_started and is_running:
+            # Сервис не должен быть запущен, но запущен
+            if not stop_service(service_name, service_type, distro_config):
+                print(f"Failed to stop {service_key}")
+            else:
+                print(f"Successfully stopped {service_key}")
+        
+        else:
+            # Состояние запуска соответствует желаемому
+            print(f"Service {service_key} running state is correct")
+
+def stow_enabler(elements):
+    """Включает элементы с помощью stow"""
+    enabled = {}
+    
+    for element, element_data in elements.items():
+        if isinstance(element_data, dict) and element_data.get('active', False):
+            enabled[element] = element_data
+        else:
+            # Отключаем неактивные элементы
+            returncode, stdout, stderr = run_shell_command(f"stow -D {shlex.quote(element)}")
+            if returncode != 0:
+                print(f"Warning: Failed to disable {element}: {stderr}")
+    
+    for element, element_data in enabled.items():
+        # Включаем активные элементы
+        inDir = ""
+        if element_data.get('path'):
+            inDir = "-t " + element_data.get('path')
+        returncode, stdout, stderr = run_shell_command(f"stow {inDir} {shlex.quote(element)}")
+        if returncode != 0:
+            print(f"Warning: Failed to enable {element}: {stderr}")
+        else:
+            # Запускаем команду build если есть
+            if isinstance(element_data, dict) and 'build' in element_data:
+                build_cmd = element_data['build']
+                print(f"Running build command for {element}: {build_cmd}")
+                returncode, stdout, stderr = run_shell_command(build_cmd)
+                if returncode != 0:
+                    print(f"Warning: Build command failed for {element}: {stderr}")
+
+def stow_disabler(elements):
+    """Отключает элементы с помощью stow"""
+    for element, element_data in elements.items():
+        returncode, stdout, stderr = run_shell_command(f"stow -D {shlex.quote(element)}")
+        if returncode != 0:
+            print(f"Warning: Failed to disable {element}: {stderr}")
+
 def show_help():
     """Показывает справку по использованию"""
     help_text = """Usage:
-  python3 script.py          - Install/configure packages and dependencies
+  python3 script.py          - Install/configure packages, services and dependencies
   python3 script.py packages - Manage only package dependencies (install/remove)
-  python3 script.py uninstall - Disable packages and stow configs
-  python3 script.py remove    - Disable packages, remove extra files and packages
+  python3 script.py services - Manage only services (enable/disable, start/stop)
+  python3 script.py stow     - Manage only stow configurations
+  python3 script.py uninstall - Disable stow configs and stop services
+  python3 script.py remove    - Disable stow configs, remove extra files, packages and stop services
   python3 script.py help      - Show this help
 
 This script expects config.json in the current working directory.
@@ -295,27 +504,45 @@ def main():
             manage_packages(config)
             sys.exit(0)
         
-        if sys.argv[1] == 'uninstall':
-            print("Uninstalling packages...")
+        if sys.argv[1] == 'services':
+            print("Managing services only...")
+            manage_services(config)
+            sys.exit(0)
+        
+        if sys.argv[1] == 'stow':
+            print("Managing stow configurations only...")
             if 'WM' in config:
-                disabler(config['WM'])
+                stow_enabler(config['WM'])
             if 'PKGS' in config:
-                disabler(config['PKGS'])
+                stow_enabler(config['PKGS'])
+            sys.exit(0)
+        
+        if sys.argv[1] == 'uninstall':
+            print("Uninstalling packages and stopping services...")
+            # Отключаем stow конфигурации
+            if 'WM' in config:
+                stow_disabler(config['WM'])
+            if 'PKGS' in config:
+                stow_disabler(config['PKGS'])
+            
+            # Останавливаем и отключаем сервисы
+            manage_services(config)
             sys.exit(0)
         
         if sys.argv[1] == 'remove':
-            print("Removing packages, extra files and uninstalling...")
+            print("Removing packages, extra files, stopping services and uninstalling...")
             # Сначала отключаем все stow конфигурации
             if 'WM' in config:
-                disabler(config['WM'])
+                stow_disabler(config['WM'])
             if 'PKGS' in config:
-                disabler(config['PKGS'])
+                stow_disabler(config['PKGS'])
             
             # Удаляем лишние файлы
             uninstall_extra_pkgs(config)
             
-            # Удаляем пакеты, которые должны быть удалены
+            # Управляем пакетами и сервисами
             manage_packages(config)
+            manage_services(config)
             sys.exit(0)
         
         if sys.argv[1] in ['help', '--help', '-h']:
@@ -327,16 +554,19 @@ def main():
     # 1. Управляем пакетами из dependencies
     manage_packages(config)
     
-    # 2. Клонируем дополнительные пакеты
+    # 2. Управляем сервисами
+    manage_services(config)
+    
+    # 3. Клонируем дополнительные пакеты
     if 'extraPkgs' in config:
         clone_extra_pkgs(config['extraPkgs'])
     
-    # 3. Включаем конфигурации через stow
+    # 4. Включаем конфигурации через stow
     if 'WM' in config:
-        enabler(config['WM'])
+        stow_enabler(config['WM'])
     
     if 'PKGS' in config:
-        enabler(config['PKGS'])
+        stow_enabler(config['PKGS'])
     
     print("Configuration completed!")
 
