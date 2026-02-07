@@ -1,18 +1,50 @@
 {
+	"distros": "@include:distros.json",
+	"currentDistro": "fedora",
 	"extraPkgs": {
-		"dwm/dwm" : "git@github.com:Lumetas/dwm.git",
-		"nvim/.config/nvim" : "git@github.com:Lumetas/nvim-cfg.git"
-	}, 
-
-	"WM" : {
-		"dwm" : {
-			"active" : true,
-			"build" : "cd ~/dwm && sudo make clean install"
+		"dwm/dwm": "git@github.com:Lumetas/dwm.git",
+		"nvim/.config/nvim": "git@github.com:Lumetas/nvim-cfg.git"
+	},
+	"WM": {
+		"dwm": {
+			"active": true,
+			"build": "cd ~/dwm && sudo make clean install"
 		},
-		"hyprland" : {
-			"active" : false
+		"hyprland": {
+			"active": false
 		}
 	},
-
-	"PKGS" : "@include:pkgs.json"
+	"PKGS": {
+		"fish": {
+			"active": true
+		},
+		"nvim": {
+			"active": true
+		},
+		"kitty": {
+			"active": true
+		},
+		"wallpapers": {
+			"active": true
+		}
+	},
+	"dependencies": "@include:deps.json",
+	"services": {
+		"ssh-server": {
+			"fedora": {
+				"start": true,
+				"enable": true,
+				"name": "sshd"
+			}
+		},
+		"open tablet driver" : {
+			"fedora": {
+				"user" : true,
+				"start": true,
+				"enable": true,
+				"name": "otd"
+			}
+		}
+	}
 }
+

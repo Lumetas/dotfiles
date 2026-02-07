@@ -52,7 +52,7 @@ def run_shell_command(cmd):
             capture_output=True, 
             text=True
         )
-        return result.returncode, result.stdout, result.stderr
+        return result.returncode, result.stdout.strip(), result.stderr.strip()
     except Exception as e:
         return -1, '', str(e)
 
@@ -138,30 +138,163 @@ def uninstall_extra_pkgs(config):
                 except OSError as e:
                     print(f"Warning: Failed to remove {expanded_path}: {e}")
 
+def get_package_config_for_distro(pkg_config, distro):
+    """Получает конфигурацию пакета для текущего дистрибутива"""
+    if distro in pkg_config:
+        return pkg_config[distro]
+    
+    # Если нет конфигурации для текущего дистрибутива, проверяем наличие default
+    if 'default' in pkg_config:
+        return pkg_config['default']
+    
+    # Если нет ни дистрибутива, ни default, возвращаем None
+    return None
+
+def check_package_installed(pkg_name, distro_config):
+    """Проверяет, установлен ли пакет"""
+    if 'checkCmd' not in distro_config:
+        return False
+    
+    # Проблема: checkCmd использует jq как жестко закодированный пакет
+    # Нужно заменить %pkg% на реальное имя пакета
+    check_cmd = distro_config['checkCmd'].replace('jq', pkg_name).replace('%pkg%', pkg_name)
+    returncode, stdout, stderr = run_shell_command(check_cmd)
+    
+    if returncode == 0 and stdout.strip() == "1":
+        return True
+    return False
+
+def install_package(pkg_name, distro_config):
+    """Устанавливает пакет"""
+    if 'installCmd' not in distro_config:
+        print(f"Error: No install command defined for {distro_config}")
+        return False
+    
+    install_cmd = distro_config['installCmd'].replace('%pkg%', pkg_name)
+    print(f"Installing package: {pkg_name}")
+    returncode, stdout, stderr = run_shell_command(install_cmd)
+    
+    if returncode != 0:
+        print(f"Error: Failed to install {pkg_name}: {stderr}")
+        return False
+    
+    return True
+
+def remove_package(pkg_name, distro_config):
+    """Удаляет пакет"""
+    if 'removeCmd' not in distro_config:
+        print(f"Error: No remove command defined for {distro_config}")
+        return False
+    
+    remove_cmd = distro_config['removeCmd'].replace('%pkg%', pkg_name)
+    print(f"Removing package: {pkg_name}")
+    returncode, stdout, stderr = run_shell_command(remove_cmd)
+    
+    if returncode != 0:
+        print(f"Error: Failed to remove {pkg_name}: {stderr}")
+        return False
+    
+    return True
+
+def manage_packages(config):
+    """Управляет пакетами на основе декларативной конфигурации"""
+    if 'dependencies' not in config or 'distros' not in config:
+        print("Warning: No dependencies or distros defined in config")
+        return
+    
+    # Получаем текущий дистрибутив
+    current_distro = config.get('currentDistro')
+    if not current_distro:
+        print("Error: currentDistro not defined in config")
+        return
+    
+    # Получаем конфиг текущего дистрибутива
+    distro_config = config['distros'].get(current_distro)
+    if not distro_config:
+        print(f"Error: No configuration found for distro: {current_distro}")
+        return
+    
+    print(f"Managing packages for distro: {current_distro}")
+    
+    # Обрабатываем все зависимости
+    for pkg_key, pkg_config in config['dependencies'].items():
+        if not isinstance(pkg_config, dict):
+            continue
+        
+        # Получаем конфигурацию пакета для текущего дистрибутива
+        pkg_distro_config = get_package_config_for_distro(pkg_config, current_distro)
+        if not pkg_distro_config:
+            print(f"Warning: No configuration for {pkg_key} on {current_distro}")
+            continue
+        
+        # Получаем имя пакета и статус
+        pkg_name = pkg_distro_config.get('name')
+        if not pkg_name:
+            print(f"Warning: No package name defined for {pkg_key} on {current_distro}")
+            continue
+        
+        should_be_installed = pkg_distro_config.get('installed', False)
+        
+        # Проверяем текущее состояние
+        is_installed = check_package_installed(pkg_name, distro_config)
+        
+        print(f"Package: {pkg_key} ({pkg_name}) - Should be installed: {should_be_installed}, Is installed: {is_installed}")
+        
+        # Приводим систему к желаемому состоянию
+        if should_be_installed and not is_installed:
+            # Пакет должен быть установлен, но не установлен
+            if not install_package(pkg_name, distro_config):
+                print(f"Failed to install {pkg_key}")
+            else:
+                print(f"Successfully installed {pkg_key}")
+        
+        elif not should_be_installed and is_installed:
+            # Пакет не должен быть установлен, но установлен
+            if not remove_package(pkg_name, distro_config):
+                print(f"Failed to remove {pkg_key}")
+            else:
+                print(f"Successfully removed {pkg_key}")
+        
+        else:
+            # Состояние соответствует желаемому
+            print(f"Package {pkg_key} is already in correct state")
+
 def show_help():
     """Показывает справку по использованию"""
     help_text = """Usage:
-  python3 script.py          - Install/configure packages
-  python3 script.py uninstall - Disable packages
-  python3 script.py remove    - Disable packages and remove extra files
+  python3 script.py          - Install/configure packages and dependencies
+  python3 script.py packages - Manage only package dependencies (install/remove)
+  python3 script.py uninstall - Disable packages and stow configs
+  python3 script.py remove    - Disable packages, remove extra files and packages
   python3 script.py help      - Show this help
+
+This script expects config.json in the current working directory.
 """
     print(help_text)
 
 def main():
+    # Определяем путь к config.json в текущей рабочей директории
+    config_path = 'config.json'
+    
     # Загружаем основной конфиг
     try:
-        with open('config.json', 'r') as f:
+        with open(config_path, 'r') as f:
             main_config = json.load(f)
     except (json.JSONDecodeError, IOError) as e:
-        print(f"Error: Invalid JSON or cannot read config.json: {e}")
+        print(f"Error: Invalid JSON or cannot read {config_path}: {e}")
+        print(f"Current directory: {os.getcwd()}")
         sys.exit(1)
     
     # Рекурсивно обрабатываем инклюды
-    config = load_config_recursive(main_config, os.path.dirname('config.json'))
+    config = load_config_recursive(main_config, os.path.dirname(config_path))
     
     # Обработка аргументов командной строки
     if len(sys.argv) >= 2:
+        if sys.argv[1] == 'packages':
+            print("Managing packages only...")
+            manage_packages(config)
+            sys.exit(0)
+        
         if sys.argv[1] == 'uninstall':
             print("Uninstalling packages...")
             if 'WM' in config:
@@ -171,28 +304,41 @@ def main():
             sys.exit(0)
         
         if sys.argv[1] == 'remove':
-            print("Removing packages and extra files...")
+            print("Removing packages, extra files and uninstalling...")
+            # Сначала отключаем все stow конфигурации
             if 'WM' in config:
                 disabler(config['WM'])
             if 'PKGS' in config:
                 disabler(config['PKGS'])
+            
+            # Удаляем лишние файлы
             uninstall_extra_pkgs(config)
+            
+            # Удаляем пакеты, которые должны быть удалены
+            manage_packages(config)
             sys.exit(0)
         
         if sys.argv[1] in ['help', '--help', '-h']:
             show_help()
             sys.exit(0)
     
-    # Клонируем дополнительные пакеты
+    print("Starting full system configuration...")
+    
+    # 1. Управляем пакетами из dependencies
+    manage_packages(config)
+    
+    # 2. Клонируем дополнительные пакеты
     if 'extraPkgs' in config:
         clone_extra_pkgs(config['extraPkgs'])
     
-    # Включаем пакеты
+    # 3. Включаем конфигурации через stow
     if 'WM' in config:
         enabler(config['WM'])
     
     if 'PKGS' in config:
         enabler(config['PKGS'])
+    
+    print("Configuration completed!")
 
 if __name__ == '__main__':
     main()

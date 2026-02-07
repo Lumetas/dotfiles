@@ -1,0 +1,9 @@
+{
+	"zsh": {
+		"fedora": {
+			"installed": true,
+			"name": "zsh"
+		}
+	}
+}
+

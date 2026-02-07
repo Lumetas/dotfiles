@@ -1,0 +1,28 @@
+{
+	"fedora": {
+		"pkgs": {
+			"install": "sudo dnf install %pkg% -y",
+			"remove": "sudo dnf remove %pkg% -y",
+			"check": "rpm -q jq > /dev/null && echo 1"
+		},
+		"services": {
+			"system": {
+				"start": "sudo systemctl start %service%",
+				"stop": "sudo systemctl stop %service%",
+				"enable": "sudo systemctl enable %service%",
+				"disable": "sudo systemctl disable %service%",
+				"enabled": "systemctl is-enabled --quiet %service% && echo 1",
+				"started": "systemctl is-active --quiet %service% && echo 1"
+			},
+			"user": {
+				"start": "sudo systemctl --user start %service%",
+				"stop": "sudo systemctl --user stop %service%",
+				"enable": "sudo systemctl --user enable %service%",
+				"disable": "sudo systemctl --user disable %service%",
+				"enabled": "systemctl --user is-enabled --quiet %service% && echo 1",
+				"started": "systemctl --user is-active --quiet %service% && echo 1"
+			}
+		}
+	}
+}
+
