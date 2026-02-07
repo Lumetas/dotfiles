@@ -22,6 +22,47 @@
 				"enabled": "systemctl --user is-enabled --quiet %service% && echo 1",
 				"started": "systemctl --user is-active --quiet %service% && echo 1"
 			}
+		},
+		"system": {
+			"hostname": {
+				"set": "sudo hostnamectl set-hostname %value%",
+				"get": "hostname"
+			},
+			"timezone": {
+				"set": "sudo timedatectl set-timezone %value%",
+				"get": "timedatectl show --property=Timezone --value"
+			},
+			"locale": {
+				"set": "sudo localectl set-locale %value%",
+				"get": "localectl status | grep 'System Locale' | cut -d= -f2 | tr -d ' '"
+			},
+			"keymap": {
+				"set": "sudo localectl set-keymap %value%",
+				"get": "localectl status | grep 'Keymap' | cut -d: -f2 | tr -d ' '"
+			}
+		},
+		"users": {
+			"exists": "id %user% > /dev/null 2>&1 && echo 1",
+			"create": {
+				"command": "sudo useradd -m -s %shell% %user%",
+				"with_groups": "sudo usermod -aG %groups% %user%"
+			},
+			"delete": {
+				"command": "sudo userdel -r %user%",
+				"keep_home": "sudo userdel %user%"
+			},
+			"modify": {
+				"shell": "sudo usermod -s %shell% %user%",
+				"home": "sudo usermod -m -d %home% %user%",
+				"lock": "sudo usermod -L %user%",
+				"unlock": "sudo usermod -U %user%"
+			},
+			"groups": {
+				"add": "sudo usermod -aG %group% %user%",
+				"remove": "sudo gpasswd -d %user% %group%",
+				"check": "id %user% | grep -q '%group%' && echo 1",
+				"list": "id -nG %user%"
+			}
 		}
 	}
 }

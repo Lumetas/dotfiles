@@ -37,6 +37,28 @@
 				"name": "sshd"
 			}
 		}
-	}
+	},
+	"system": {
+		"hostname": "lumetas",
+		"timezone": "Asia/Yekaterinburg",
+		"locale": "ru_UA.UTF-8",
+		"keymap": "us"
+	},
+	"users": [
+		{
+			"name": "lum",
+			"home": "/home/lum",
+			"shell": "/bin/fish",
+			"groups": [
+				"lum",
+				"wheel",
+				"video",
+				"input",
+				"docker"
+			],
+			"enabled": true,
+			"lock": false
+		}
+	]
 }
 

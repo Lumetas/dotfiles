@@ -5,570 +5,1169 @@ import sys
 import json
 import subprocess
 import shlex
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Union
+from enum import Enum
 
-def load_config_recursive(config, base_path=''):
-    """
-    Рекурсивно загружает конфигурацию, обрабатывая вложенные @include
-    """
-    result = {}
+
+class Operation(Enum):
+    """Типы операций для dry-run режима"""
+    INSTALL = "Установить"
+    REMOVE = "Удалить"
+    ENABLE = "Включить"
+    DISABLE = "Выключить"
+    START = "Запустить"
+    STOP = "Остановить"
+    CREATE = "Создать"
+    DELETE = "Удалить"
+    MODIFY = "Изменить"
+    SET = "Установить"
+    CLONE = "Клонировать"
+
+
+@dataclass
+class DryRunOperation:
+    """Операция для dry-run режима"""
+    op: Operation
+    description: str
+    command: Optional[str] = None
+
+
+class SystemConfigurator:
+    """Основной класс для конфигурации системы"""
     
-    for key, value in config.items():
-        # Если значение начинается с @include:, обрабатываем как инклюд
-        if isinstance(value, str) and value.startswith('@include:'):
-            include_file = value[len('@include:'):]
-            
-            # Если путь относительный, добавляем базовый путь
-            if base_path and not include_file.startswith('/'):
-                include_file = os.path.join(base_path, include_file)
-            
-            if not os.path.exists(include_file):
-                print(f"Warning: Include file not found: {include_file}")
-                continue
-            
-            try:
-                with open(include_file, 'r') as f:
-                    included_config = json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
-                print(f"Warning: Invalid JSON or cannot read include file: {include_file} - {e}")
-                continue
-            
-            # Рекурсивно обрабатываем включенный конфиг
-            result[key] = load_config_recursive(included_config, os.path.dirname(include_file))
-        elif isinstance(value, dict):
-            # Рекурсивно обрабатываем вложенные словари
-            result[key] = load_config_recursive(value, base_path)
-        else:
-            # Обычное значение
-            result[key] = value
-    
-    return result
-
-def run_shell_command(cmd):
-    """Выполняет shell команду и возвращает результат"""
-    try:
-        result = subprocess.run(
-            cmd, 
-            shell=True, 
-            capture_output=True, 
-            text=True
-        )
-        return result.returncode, result.stdout.strip(), result.stderr.strip()
-    except Exception as e:
-        return -1, '', str(e)
-
-def expand_path(path):
-    """Расширяет пути с ~/ до домашней директории"""
-    if path.startswith('~/'):
-        return os.path.join(os.path.expanduser('~'), path[2:])
-    return path
-
-def clone_extra_pkgs(extra_pkgs):
-    """Клонирует дополнительные пакеты из Git"""
-    for path, url in extra_pkgs.items():
-        expanded_path = expand_path(path)
+    def __init__(self, config_path: str = 'config.json', dry_run: bool = False):
+        self.dry_run = dry_run
+        self.dry_run_ops: List[DryRunOperation] = []
+        self.config_path = config_path
+        self.config: Dict[str, Any] = {}
         
-        # Создаем директорию, если не существует
-        dir_path = os.path.dirname(expanded_path)
-        if not os.path.exists(dir_path):
+    def log_change(self, message: str):
+        """Логирует только изменения"""
+        if not self.dry_run:
+            print(f"✓ {message}")
+        else:
+            print(f"[DRY RUN] {message}")
+    
+    def log_info(self, message: str):
+        """Логирует информацию"""
+        if not self.dry_run:
+            print(f"  {message}")
+    
+    def log_warning(self, message: str):
+        """Логирует предупреждения"""
+        print(f"⚠ {message}")
+    
+    def log_error(self, message: str):
+        """Логирует ошибки"""
+        print(f"✗ {message}")
+    
+    def add_dry_run_op(self, op: Operation, description: str, command: Optional[str] = None):
+        """Добавляет операцию в список dry-run операций"""
+        if self.dry_run:
+            self.dry_run_ops.append(DryRunOperation(op, description, command))
+    
+    def run_command(self, cmd: str) -> tuple[int, str, str]:
+        """Выполняет shell команду"""
+        if self.dry_run:
+            return 0, "", ""
+        
+        try:
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                encoding='utf-8'
+            )
+            return result.returncode, result.stdout.strip(), result.stderr.strip()
+        except Exception as e:
+            return -1, "", str(e)
+    
+    def load_config_recursive(self, config: Dict[str, Any], base_path: str = '') -> Dict[str, Any]:
+        """Рекурсивно загружает конфигурацию с обработкой @include"""
+        result = {}
+        
+        for key, value in config.items():
+            if isinstance(value, str) and value.startswith('@include:'):
+                include_file = value[len('@include:'):]
+                
+                if base_path and not include_file.startswith('/'):
+                    include_file = os.path.join(base_path, include_file)
+                
+                if not os.path.exists(include_file):
+                    self.log_warning(f"Файл для включения не найден: {include_file}")
+                    continue
+                
+                try:
+                    with open(include_file, 'r', encoding='utf-8') as f:
+                        included_config = json.load(f)
+                except (json.JSONDecodeError, IOError) as e:
+                    self.log_warning(f"Неверный JSON или невозможно прочитать файл: {include_file} - {e}")
+                    continue
+                
+                result[key] = self.load_config_recursive(
+                    included_config, 
+                    os.path.dirname(include_file)
+                )
+            elif isinstance(value, dict):
+                result[key] = self.load_config_recursive(value, base_path)
+            else:
+                result[key] = value
+        
+        return result
+    
+    def load_config(self) -> bool:
+        """Загружает конфигурацию"""
+        try:
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                main_config = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            self.log_error(f"Неверный JSON или невозможно прочитать {self.config_path}: {e}")
+            self.log_info(f"Текущая директория: {os.getcwd()}")
+            return False
+        
+        self.config = self.load_config_recursive(
+            main_config, 
+            os.path.dirname(self.config_path)
+        )
+        return True
+    
+    def get_current_distro_config(self) -> Optional[Dict[str, Any]]:
+        """Возвращает конфигурацию текущего дистрибутива"""
+        current_distro = self.config.get('currentDistro')
+        if not current_distro:
+            self.log_error("currentDistro не определен в конфиге")
+            return None
+        
+        distros = self.config.get('distros', {})
+        distro_config = distros.get(current_distro)
+        if not distro_config:
+            self.log_error(f"Конфигурация для дистрибутива не найдена: {current_distro}")
+            return None
+        
+        return distro_config
+    
+    # ========== Управление пакетами ==========
+    
+    def check_package_installed(self, pkg_name: str, distro_config: Dict[str, Any]) -> bool:
+        """Проверяет, установлен ли пакет"""
+        pkgs_config = distro_config.get('pkgs', {})
+        check_cmd = pkgs_config.get('check')
+        
+        if not check_cmd:
+            return False
+        
+        check_cmd = check_cmd.replace('%pkg%', pkg_name)
+        returncode, stdout, stderr = self.run_command(check_cmd)
+        
+        return returncode == 0 and stdout.strip() == "1"
+    
+    def manage_packages(self):
+        """Управляет пакетами на основе декларативной конфигурации"""
+        if 'dependencies' not in self.config:
+            self.log_info("Зависимости не определены в конфиге")
+            return
+        
+        distro_config = self.get_current_distro_config()
+        if not distro_config:
+            return
+        
+        current_distro = self.config.get('currentDistro')
+        self.log_info(f"Управление пакетами для дистрибутива: {current_distro}")
+        
+        dependencies = self.config.get('dependencies', {})
+        for pkg_key, pkg_config in dependencies.items():
+            if not isinstance(pkg_config, dict):
+                continue
+            
+            pkg_distro_config = pkg_config.get(current_distro, pkg_config.get('default'))
+            if not pkg_distro_config:
+                self.log_warning(f"Конфигурация для {pkg_key} на {current_distro} не найдена")
+                continue
+            
+            pkg_name = pkg_distro_config.get('name', pkg_key)
+            should_be_installed = pkg_distro_config.get('installed', False)
+            is_installed = self.check_package_installed(pkg_name, distro_config)
+            
+            if should_be_installed and not is_installed:
+                self._install_package(pkg_name, distro_config)
+            elif not should_be_installed and is_installed:
+                self._remove_package(pkg_name, distro_config)
+    
+    def _install_package(self, pkg_name: str, distro_config: Dict[str, Any]):
+        """Устанавливает пакет"""
+        pkgs_config = distro_config.get('pkgs', {})
+        install_cmd = pkgs_config.get('install')
+        
+        if not install_cmd:
+            self.log_error(f"Команда установки не определена для дистрибутива")
+            return
+        
+        install_cmd = install_cmd.replace('%pkg%', pkg_name)
+        self.add_dry_run_op(Operation.INSTALL, f"Пакет: {pkg_name}", install_cmd)
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Установка пакета: {pkg_name}")
+        returncode, stdout, stderr = self.run_command(install_cmd)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось установить {pkg_name}: {stderr}")
+    
+    def _remove_package(self, pkg_name: str, distro_config: Dict[str, Any]):
+        """Удаляет пакет"""
+        pkgs_config = distro_config.get('pkgs', {})
+        remove_cmd = pkgs_config.get('remove')
+        
+        if not remove_cmd:
+            self.log_error(f"Команда удаления не определена для дистрибутива")
+            return
+        
+        remove_cmd = remove_cmd.replace('%pkg%', pkg_name)
+        self.add_dry_run_op(Operation.REMOVE, f"Пакет: {pkg_name}", remove_cmd)
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Удаление пакета: {pkg_name}")
+        returncode, stdout, stderr = self.run_command(remove_cmd)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось удалить {pkg_name}: {stderr}")
+    
+    # ========== Управление сервисами ==========
+    
+    def check_service_status(self, service_name: str, service_type: str, 
+                           distro_config: Dict[str, Any]) -> bool:
+        """Проверяет статус сервиса"""
+        services_config = distro_config.get('services', {})
+        service_cmds = services_config.get('system')
+        
+        if service_type == 'user':
+            service_cmds = services_config.get('user')
+        
+        if not service_cmds or 'enabled' not in service_cmds:
+            return False
+        
+        check_cmd = service_cmds['enabled'].replace('%service%', service_name)
+        returncode, stdout, stderr = self.run_command(check_cmd)
+        
+        return returncode == 0 and stdout.strip() == "1"
+    
+    def check_service_running(self, service_name: str, service_type: str,
+                            distro_config: Dict[str, Any]) -> bool:
+        """Проверяет, запущен ли сервис"""
+        services_config = distro_config.get('services', {})
+        service_cmds = services_config.get('system')
+        
+        if service_type == 'user':
+            service_cmds = services_config.get('user')
+        
+        if not service_cmds or 'started' not in service_cmds:
+            return False
+        
+        check_cmd = service_cmds['started'].replace('%service%', service_name)
+        returncode, stdout, stderr = self.run_command(check_cmd)
+        
+        return returncode == 0 and stdout.strip() == "1"
+    
+    def manage_services(self):
+        """Управляет сервисами на основе декларативной конфигурации"""
+        if 'services' not in self.config:
+            self.log_info("Сервисы не определены в конфиге")
+            return
+        
+        distro_config = self.get_current_distro_config()
+        if not distro_config:
+            return
+        
+        current_distro = self.config.get('currentDistro')
+        self.log_info(f"Управление сервисами для дистрибутива: {current_distro}")
+        
+        services = self.config.get('services', {})
+        for service_key, service_config in services.items():
+            if not isinstance(service_config, dict):
+                continue
+            
+            service_distro_config = service_config.get(current_distro)
+            if not service_distro_config:
+                continue
+            
+            service_name = service_distro_config.get('name')
+            if not service_name:
+                continue
+            
+            should_be_enabled = service_distro_config.get('enable', False)
+            should_be_started = service_distro_config.get('start', False)
+            is_user_service = service_distro_config.get('user', False)
+            
+            service_type = 'user' if is_user_service else 'system'
+            
+            is_enabled = self.check_service_status(
+                service_name, service_type, distro_config
+            )
+            is_running = self.check_service_running(
+                service_name, service_type, distro_config
+            )
+            
+            # Управление включением/выключением
+            if should_be_enabled and not is_enabled:
+                self._enable_service(service_name, service_type, distro_config)
+            elif not should_be_enabled and is_enabled:
+                self._disable_service(service_name, service_type, distro_config)
+            
+            # Управление запуском/остановкой
+            if should_be_started and not is_running:
+                self._start_service(service_name, service_type, distro_config)
+            elif not should_be_started and is_running:
+                self._stop_service(service_name, service_type, distro_config)
+    
+    def _enable_service(self, service_name: str, service_type: str,
+                       distro_config: Dict[str, Any]):
+        """Включает сервис"""
+        services_config = distro_config.get('services', {})
+        service_cmds = services_config.get('system')
+        
+        if service_type == 'user':
+            service_cmds = services_config.get('user')
+        
+        if not service_cmds or 'enable' not in service_cmds:
+            self.log_error(f"Команда включения не определена для {service_type} сервисов")
+            return
+        
+        enable_cmd = service_cmds['enable'].replace('%service%', service_name)
+        self.add_dry_run_op(
+            Operation.ENABLE, 
+            f"Сервис: {service_name} ({service_type})", 
+            enable_cmd
+        )
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Включение {service_type} сервиса: {service_name}")
+        returncode, stdout, stderr = self.run_command(enable_cmd)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось включить {service_name}: {stderr}")
+    
+    def _disable_service(self, service_name: str, service_type: str,
+                        distro_config: Dict[str, Any]):
+        """Отключает сервис"""
+        services_config = distro_config.get('services', {})
+        service_cmds = services_config.get('system')
+        
+        if service_type == 'user':
+            service_cmds = services_config.get('user')
+        
+        if not service_cmds or 'disable' not in service_cmds:
+            self.log_error(f"Команда отключения не определена для {service_type} сервисов")
+            return
+        
+        disable_cmd = service_cmds['disable'].replace('%service%', service_name)
+        self.add_dry_run_op(
+            Operation.DISABLE,
+            f"Сервис: {service_name} ({service_type})",
+            disable_cmd
+        )
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Отключение {service_type} сервиса: {service_name}")
+        returncode, stdout, stderr = self.run_command(disable_cmd)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось отключить {service_name}: {stderr}")
+    
+    def _start_service(self, service_name: str, service_type: str,
+                      distro_config: Dict[str, Any]):
+        """Запускает сервис"""
+        services_config = distro_config.get('services', {})
+        service_cmds = services_config.get('system')
+        
+        if service_type == 'user':
+            service_cmds = services_config.get('user')
+        
+        if not service_cmds or 'start' not in service_cmds:
+            self.log_error(f"Команда запуска не определена для {service_type} сервисов")
+            return
+        
+        start_cmd = service_cmds['start'].replace('%service%', service_name)
+        self.add_dry_run_op(
+            Operation.START,
+            f"Сервис: {service_name} ({service_type})",
+            start_cmd
+        )
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Запуск {service_type} сервиса: {service_name}")
+        returncode, stdout, stderr = self.run_command(start_cmd)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось запустить {service_name}: {stderr}")
+    
+    def _stop_service(self, service_name: str, service_type: str,
+                     distro_config: Dict[str, Any]):
+        """Останавливает сервис"""
+        services_config = distro_config.get('services', {})
+        service_cmds = services_config.get('system')
+        
+        if service_type == 'user':
+            service_cmds = services_config.get('user')
+        
+        if not service_cmds or 'stop' not in service_cmds:
+            self.log_error(f"Команда остановки не определена для {service_type} сервисов")
+            return
+        
+        stop_cmd = service_cmds['stop'].replace('%service%', service_name)
+        self.add_dry_run_op(
+            Operation.STOP,
+            f"Сервис: {service_name} ({service_type})",
+            stop_cmd
+        )
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Остановка {service_type} сервиса: {service_name}")
+        returncode, stdout, stderr = self.run_command(stop_cmd)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось остановить {service_name}: {stderr}")
+    
+    # ========== Управление дополнительными пакетами ==========
+    
+    def expand_path(self, path: str) -> str:
+        """Расширяет пути с ~/ до домашней директории"""
+        if path.startswith('~/'):
+            return os.path.join(os.path.expanduser('~'), path[2:])
+        return path
+    
+    def manage_extra_packages(self):
+        """Управляет дополнительными пакетами"""
+        if 'extraPkgs' not in self.config:
+            return
+        
+        self.log_info("Управление дополнительными пакетами")
+        extra_pkgs = self.config.get('extraPkgs', {})
+        
+        for path, url in extra_pkgs.items():
+            expanded_path = self.expand_path(path)
+            
+            if not os.path.exists(expanded_path):
+                self._clone_extra_package(url, expanded_path)
+    
+    def _clone_extra_package(self, url: str, path: str):
+        """Клонирует дополнительный пакет"""
+        dir_path = os.path.dirname(path)
+        if dir_path and not os.path.exists(dir_path):
             try:
                 os.makedirs(dir_path, 0o755, exist_ok=True)
             except OSError as e:
-                print(f"Warning: Failed to create directory {dir_path}: {e}")
-                continue
+                self.log_error(f"Не удалось создать директорию {dir_path}: {e}")
+                return
         
-        if not os.path.exists(expanded_path):
-            print(f"Cloning: {url} to {expanded_path}")
-            returncode, stdout, stderr = run_shell_command(
-                f"git clone {shlex.quote(url)} {shlex.quote(expanded_path)}"
-            )
-            if returncode != 0:
-                print(f"Warning: Failed to clone {url}: {stderr}")
-
-def uninstall_extra_pkgs(config):
-    """Удаляет дополнительные пакеты"""
-    if 'extraPkgs' in config:
-        extra_pkgs = config['extraPkgs']
+        clone_cmd = f"git clone {shlex.quote(url)} {shlex.quote(path)}"
+        self.add_dry_run_op(Operation.CLONE, f"Репозиторий: {url} → {path}", clone_cmd)
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Клонирование: {url} в {path}")
+        returncode, stdout, stderr = self.run_command(clone_cmd)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось клонировать {url}: {stderr}")
+    
+    def uninstall_extra_packages(self):
+        """Удаляет дополнительные пакеты"""
+        if 'extraPkgs' not in self.config:
+            return
+        
+        self.log_info("Удаление дополнительных пакетов")
+        extra_pkgs = self.config.get('extraPkgs', {})
+        
         for path, url in extra_pkgs.items():
-            expanded_path = expand_path(path)
+            expanded_path = self.expand_path(path)
+            
             if os.path.exists(expanded_path):
-                print(f"Removing: {expanded_path}")
+                self.add_dry_run_op(
+                    Operation.REMOVE,
+                    f"Директория: {expanded_path}",
+                    f"rm -rf {shlex.quote(expanded_path)}"
+                )
+                
+                if self.dry_run:
+                    continue
+                
+                self.log_change(f"Удаление: {expanded_path}")
                 try:
-                    if os.path.isdir(expanded_path):
-                        import shutil
-                        shutil.rmtree(expanded_path)
-                    else:
-                        os.remove(expanded_path)
+                    import shutil
+                    shutil.rmtree(expanded_path)
                 except OSError as e:
-                    print(f"Warning: Failed to remove {expanded_path}: {e}")
-
-def check_package_installed(pkg_name, distro_config):
-    """Проверяет, установлен ли пакет"""
-    if 'pkgs' not in distro_config or 'check' not in distro_config['pkgs']:
-        return False
+                    self.log_error(f"Не удалось удалить {expanded_path}: {e}")
     
-    check_cmd = distro_config['pkgs']['check'].replace('jq', pkg_name).replace('%pkg%', pkg_name)
-    returncode, stdout, stderr = run_shell_command(check_cmd)
+    # ========== Управление Stow ==========
     
-    if returncode == 0 and stdout.strip() == "1":
-        return True
-    return False
-
-def install_package(pkg_name, distro_config):
-    """Устанавливает пакет"""
-    if 'pkgs' not in distro_config or 'install' not in distro_config['pkgs']:
-        print(f"Error: No install command defined for distro")
-        return False
-    
-    install_cmd = distro_config['pkgs']['install'].replace('%pkg%', pkg_name)
-    print(f"Installing package: {pkg_name}")
-    returncode, stdout, stderr = run_shell_command(install_cmd)
-    
-    if returncode != 0:
-        print(f"Error: Failed to install {pkg_name}: {stderr}")
-        return False
-    
-    return True
-
-def remove_package(pkg_name, distro_config):
-    """Удаляет пакет"""
-    if 'pkgs' not in distro_config or 'remove' not in distro_config['pkgs']:
-        print(f"Error: No remove command defined for distro")
-        return False
-    
-    remove_cmd = distro_config['pkgs']['remove'].replace('%pkg%', pkg_name)
-    print(f"Removing package: {pkg_name}")
-    returncode, stdout, stderr = run_shell_command(remove_cmd)
-    
-    if returncode != 0:
-        print(f"Error: Failed to remove {pkg_name}: {stderr}")
-        return False
-    
-    return True
-
-def manage_packages(config):
-    """Управляет пакетами на основе декларативной конфигурации"""
-    if 'dependencies' not in config or 'distros' not in config:
-        print("Warning: No dependencies or distros defined in config")
-        return
-    
-    # Получаем текущий дистрибутив
-    current_distro = config.get('currentDistro')
-    if not current_distro:
-        print("Error: currentDistro not defined in config")
-        return
-    
-    # Получаем конфиг текущего дистрибутива
-    distro_config = config['distros'].get(current_distro)
-    if not distro_config:
-        print(f"Error: No configuration found for distro: {current_distro}")
-        return
-    
-    print(f"Managing packages for distro: {current_distro}")
-    
-    # Обрабатываем все зависимости
-    for pkg_key, pkg_config in config['dependencies'].items():
-        if not isinstance(pkg_config, dict):
-            continue
+    def manage_stow(self):
+        """Управляет конфигурациями через stow"""
+        self.log_info("Управление конфигурациями Stow")
         
-        # Получаем конфигурацию пакета для текущего дистрибутива
-        pkg_distro_config = pkg_config.get(current_distro, pkg_config.get('default'))
-        if not pkg_distro_config:
-            print(f"Warning: No configuration for {pkg_key} on {current_distro}")
-            continue
+        if 'WM' in self.config:
+            self._manage_stow_elements(self.config['WM'], 'WM')
         
-        # Получаем имя пакета и статус
-        pkg_name = pkg_distro_config.get('name', pkg_key)
-        should_be_installed = pkg_distro_config.get('installed', False)
-        
-        # Проверяем текущее состояние
-        is_installed = check_package_installed(pkg_name, distro_config)
-        
-        print(f"Package: {pkg_key} ({pkg_name}) - Should be installed: {should_be_installed}, Is installed: {is_installed}")
-        
-        # Приводим систему к желаемому состоянию
-        if should_be_installed and not is_installed:
-            # Пакет должен быть установлен, но не установлен
-            if not install_package(pkg_name, distro_config):
-                print(f"Failed to install {pkg_key}")
+        if 'PKGS' in self.config:
+            self._manage_stow_elements(self.config['PKGS'], 'PKGS')
+    
+    def _manage_stow_elements(self, elements: Dict[str, Any], category: str):
+        """Управляет элементами stow"""
+        for element, element_data in elements.items():
+            if isinstance(element_data, dict) and element_data.get('active', False):
+                self._enable_stow_element(element, element_data)
             else:
-                print(f"Successfully installed {pkg_key}")
-        
-        elif not should_be_installed and is_installed:
-            # Пакет не должен быть установлен, но установлен
-            if not remove_package(pkg_name, distro_config):
-                print(f"Failed to remove {pkg_key}")
-            else:
-                print(f"Successfully removed {pkg_key}")
-        
-        else:
-            # Состояние соответствует желаемому
-            print(f"Package {pkg_key} is already in correct state")
-
-def check_service_status(service_name, service_type, distro_config):
-    """Проверяет статус сервиса"""
-    if 'services' not in distro_config:
-        return False
+                self._disable_stow_element(element)
     
-    # Определяем тип сервиса: system или user
-    service_cmds = distro_config['services'].get('system')
-    if service_type == 'user':
-        service_cmds = distro_config['services'].get('user')
-    
-    if not service_cmds or 'enabled' not in service_cmds:
-        return False
-    
-    check_cmd = service_cmds['enabled'].replace('%service%', service_name)
-    returncode, stdout, stderr = run_shell_command(check_cmd)
-    
-    if returncode == 0 and stdout.strip() == "1":
-        return True
-    return False
-
-def check_service_running(service_name, service_type, distro_config):
-    """Проверяет, запущен ли сервис"""
-    if 'services' not in distro_config:
-        return False
-    
-    # Определяем тип сервиса: system или user
-    service_cmds = distro_config['services'].get('system')
-    if service_type == 'user':
-        service_cmds = distro_config['services'].get('user')
-    
-    if not service_cmds or 'started' not in service_cmds:
-        return False
-    
-    check_cmd = service_cmds['started'].replace('%service%', service_name)
-    returncode, stdout, stderr = run_shell_command(check_cmd)
-    
-    if returncode == 0 and stdout.strip() == "1":
-        return True
-    return False
-
-def enable_service(service_name, service_type, distro_config):
-    """Включает сервис"""
-    if 'services' not in distro_config:
-        return False
-    
-    # Определяем тип сервиса: system или user
-    service_cmds = distro_config['services'].get('system')
-    if service_type == 'user':
-        service_cmds = distro_config['services'].get('user')
-    
-    if not service_cmds or 'enable' not in service_cmds:
-        print(f"Error: No enable command for {service_type} services")
-        return False
-    
-    enable_cmd = service_cmds['enable'].replace('%service%', service_name)
-    print(f"Enabling {service_type} service: {service_name}")
-    returncode, stdout, stderr = run_shell_command(enable_cmd)
-    
-    if returncode != 0:
-        print(f"Error: Failed to enable {service_name}: {stderr}")
-        return False
-    
-    return True
-
-def disable_service(service_name, service_type, distro_config):
-    """Отключает сервис"""
-    if 'services' not in distro_config:
-        return False
-    
-    # Определяем тип сервиса: system или user
-    service_cmds = distro_config['services'].get('system')
-    if service_type == 'user':
-        service_cmds = distro_config['services'].get('user')
-    
-    if not service_cmds or 'disable' not in service_cmds:
-        print(f"Error: No disable command for {service_type} services")
-        return False
-    
-    disable_cmd = service_cmds['disable'].replace('%service%', service_name)
-    print(f"Disabling {service_type} service: {service_name}")
-    returncode, stdout, stderr = run_shell_command(disable_cmd)
-    
-    if returncode != 0:
-        print(f"Error: Failed to disable {service_name}: {stderr}")
-        return False
-    
-    return True
-
-def start_service(service_name, service_type, distro_config):
-    """Запускает сервис"""
-    if 'services' not in distro_config:
-        return False
-    
-    # Определяем тип сервиса: system или user
-    service_cmds = distro_config['services'].get('system')
-    if service_type == 'user':
-        service_cmds = distro_config['services'].get('user')
-    
-    if not service_cmds or 'start' not in service_cmds:
-        print(f"Error: No start command for {service_type} services")
-        return False
-    
-    start_cmd = service_cmds['start'].replace('%service%', service_name)
-    print(f"Starting {service_type} service: {service_name}")
-    returncode, stdout, stderr = run_shell_command(start_cmd)
-    
-    if returncode != 0:
-        print(f"Error: Failed to start {service_name}: {stderr}")
-        return False
-    
-    return True
-
-def stop_service(service_name, service_type, distro_config):
-    """Останавливает сервис"""
-    if 'services' not in distro_config:
-        return False
-    
-    # Определяем тип сервиса: system или user
-    service_cmds = distro_config['services'].get('system')
-    if service_type == 'user':
-        service_cmds = distro_config['services'].get('user')
-    
-    if not service_cmds or 'stop' not in service_cmds:
-        print(f"Error: No stop command for {service_type} services")
-        return False
-    
-    stop_cmd = service_cmds['stop'].replace('%service%', service_name)
-    print(f"Stopping {service_type} service: {service_name}")
-    returncode, stdout, stderr = run_shell_command(stop_cmd)
-    
-    if returncode != 0:
-        print(f"Error: Failed to stop {service_name}: {stderr}")
-        return False
-    
-    return True
-
-def manage_services(config):
-    """Управляет сервисами на основе декларативной конфигурации"""
-    if 'services' not in config or 'distros' not in config:
-        print("Warning: No services or distros defined in config")
-        return
-    
-    # Получаем текущий дистрибутив
-    current_distro = config.get('currentDistro')
-    if not current_distro:
-        print("Error: currentDistro not defined in config")
-        return
-    
-    # Получаем конфиг текущего дистрибутива
-    distro_config = config['distros'].get(current_distro)
-    if not distro_config:
-        print(f"Error: No configuration found for distro: {current_distro}")
-        return
-    
-    print(f"Managing services for distro: {current_distro}")
-    
-    # Обрабатываем все сервисы
-    for service_key, service_config in config['services'].items():
-        if not isinstance(service_config, dict):
-            continue
-        
-        # Получаем конфигурацию сервиса для текущего дистрибутива
-        service_distro_config = service_config.get(current_distro)
-        if not service_distro_config:
-            print(f"Warning: No configuration for {service_key} on {current_distro}")
-            continue
-        
-        # Получаем параметры сервиса
-        service_name = service_distro_config.get('name')
-        if not service_name:
-            print(f"Warning: No service name defined for {service_key}")
-            continue
-        
-        should_be_enabled = service_distro_config.get('enable', False)
-        should_be_started = service_distro_config.get('start', False)
-        is_user_service = service_distro_config.get('user', False)
-        
-        service_type = 'user' if is_user_service else 'system'
-        
-        # Проверяем текущее состояние
-        is_enabled = check_service_status(service_name, service_type, distro_config)
-        is_running = check_service_running(service_name, service_type, distro_config)
-        
-        print(f"Service: {service_key} ({service_name}, {service_type})")
-        print(f"  Should be enabled: {should_be_enabled}, Is enabled: {is_enabled}")
-        print(f"  Should be started: {should_be_started}, Is running: {is_running}")
-        
-        # Управляем состоянием включения/выключения
-        if should_be_enabled and not is_enabled:
-            # Сервис должен быть включен, но не включен
-            if not enable_service(service_name, service_type, distro_config):
-                print(f"Failed to enable {service_key}")
-            else:
-                print(f"Successfully enabled {service_key}")
-        
-        elif not should_be_enabled and is_enabled:
-            # Сервис не должен быть включен, но включен
-            if not disable_service(service_name, service_type, distro_config):
-                print(f"Failed to disable {service_key}")
-            else:
-                print(f"Successfully disabled {service_key}")
-        
-        else:
-            # Состояние включения соответствует желаемому
-            print(f"Service {service_key} enabled state is correct")
-        
-        # Управляем состоянием запуска/остановки
-        if should_be_started and not is_running:
-            # Сервис должен быть запущен, но не запущен
-            if not start_service(service_name, service_type, distro_config):
-                print(f"Failed to start {service_key}")
-            else:
-                print(f"Successfully started {service_key}")
-        
-        elif not should_be_started and is_running:
-            # Сервис не должен быть запущен, но запущен
-            if not stop_service(service_name, service_type, distro_config):
-                print(f"Failed to stop {service_key}")
-            else:
-                print(f"Successfully stopped {service_key}")
-        
-        else:
-            # Состояние запуска соответствует желаемому
-            print(f"Service {service_key} running state is correct")
-
-def stow_enabler(elements):
-    """Включает элементы с помощью stow"""
-    enabled = {}
-    
-    for element, element_data in elements.items():
-        if isinstance(element_data, dict) and element_data.get('active', False):
-            enabled[element] = element_data
-        else:
-            # Отключаем неактивные элементы
-            returncode, stdout, stderr = run_shell_command(f"stow -D {shlex.quote(element)}")
-            if returncode != 0:
-                print(f"Warning: Failed to disable {element}: {stderr}")
-    
-    for element, element_data in enabled.items():
-        # Включаем активные элементы
-        inDir = ""
+    def _enable_stow_element(self, element: str, element_data: Dict[str, Any]):
+        """Включает элемент stow"""
+        in_dir = ""
         if element_data.get('path'):
-            inDir = "-t " + element_data.get('path')
-        returncode, stdout, stderr = run_shell_command(f"stow {inDir} {shlex.quote(element)}")
+            in_dir = f"-t {shlex.quote(element_data['path'])}"
+        
+        stow_cmd = f"stow {in_dir} {shlex.quote(element)}"
+        self.add_dry_run_op(
+            Operation.ENABLE,
+            f"Stow элемент: {element}",
+            stow_cmd
+        )
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Включение Stow элемента: {element}")
+        returncode, stdout, stderr = self.run_command(stow_cmd)
+        
         if returncode != 0:
-            print(f"Warning: Failed to enable {element}: {stderr}")
+            self.log_error(f"Не удалось включить {element}: {stderr}")
+            return
+        
+        # Запускаем команду build если есть
+        if 'build' in element_data:
+            build_cmd = element_data['build']
+            self.add_dry_run_op(
+                Operation.INSTALL,
+                f"Сборка: {element}",
+                build_cmd
+            )
+            
+            if self.dry_run:
+                return
+            
+            self.log_info(f"Сборка {element}: {build_cmd}")
+            returncode, stdout, stderr = self.run_command(build_cmd)
+            
+            if returncode != 0:
+                self.log_error(f"Сборка не удалась для {element}: {stderr}")
+    
+    def _disable_stow_element(self, element: str):
+        """Отключает элемент stow"""
+        stow_cmd = f"stow -D {shlex.quote(element)}"
+        self.add_dry_run_op(
+            Operation.DISABLE,
+            f"Stow элемент: {element}",
+            stow_cmd
+        )
+        
+        if self.dry_run:
+            return
+        
+        returncode, stdout, stderr = self.run_command(stow_cmd)
+        if returncode != 0:
+            self.log_warning(f"Не удалось отключить {element}: {stderr}")
+    
+    def uninstall_stow(self):
+        """Отключает все конфигурации stow"""
+        self.log_info("Отключение конфигураций Stow")
+        
+        if 'WM' in self.config:
+            for element in self.config['WM']:
+                self._disable_stow_element(element)
+        
+        if 'PKGS' in self.config:
+            for element in self.config['PKGS']:
+                self._disable_stow_element(element)
+    
+    # ========== Управление пользователями ==========
+    
+    def manage_users(self):
+        """Управляет пользователями на основе декларативной конфигурации"""
+        if 'users' not in self.config:
+            self.log_info("Пользователи не определены в конфиге")
+            return
+        
+        distro_config = self.get_current_distro_config()
+        if not distro_config:
+            return
+        
+        users_config = distro_config.get('users', {})
+        if not users_config:
+            self.log_warning("Конфигурация пользователей не найдена для дистрибутива")
+            return
+        
+        self.log_info("Управление пользователями")
+        users = self.config.get('users', [])
+        
+        for user_config in users:
+            if not isinstance(user_config, dict):
+                continue
+            
+            user_name = user_config.get('name')
+            if not user_name:
+                continue
+            
+            enabled = user_config.get('enabled', True)
+            
+            if enabled:
+                self._create_or_update_user(user_name, user_config, users_config)
+            else:
+                self._delete_user(user_name, user_config, users_config)
+    
+    def _check_user_exists(self, user_name: str, users_config: Dict[str, Any]) -> bool:
+        """Проверяет, существует ли пользователь"""
+        exists_cmd = users_config.get('exists')
+        if not exists_cmd:
+            return False
+        
+        exists_cmd = exists_cmd.replace('%user%', user_name)
+        returncode, stdout, stderr = self.run_command(exists_cmd)
+        
+        return returncode == 0 and stdout.strip() == "1"
+    
+    def _check_user_in_group(self, user_name: str, group: str, 
+                           users_config: Dict[str, Any]) -> bool:
+        """Проверяет, состоит ли пользователь в группе"""
+        groups_config = users_config.get('groups', {})
+        check_cmd = groups_config.get('check')
+        
+        if not check_cmd:
+            return False
+        
+        check_cmd = check_cmd.replace('%user%', user_name).replace('%group%', group)
+        returncode, stdout, stderr = self.run_command(check_cmd)
+        
+        return returncode == 0 and stdout.strip() == "1"
+    
+    def _get_user_groups(self, user_name: str, users_config: Dict[str, Any]) -> List[str]:
+        """Получает список групп пользователя"""
+        groups_config = users_config.get('groups', {})
+        list_cmd = groups_config.get('list')
+        
+        if not list_cmd:
+            return []
+        
+        list_cmd = list_cmd.replace('%user%', user_name)
+        returncode, stdout, stderr = self.run_command(list_cmd)
+        
+        if returncode == 0 and stdout:
+            return [g.strip() for g in stdout.split()]
+        
+        return []
+    
+    def _create_or_update_user(self, user_name: str, user_config: Dict[str, Any],
+                              users_config: Dict[str, Any]):
+        """Создает или обновляет пользователя"""
+        user_exists = self._check_user_exists(user_name, users_config)
+        
+        if not user_exists:
+            self._create_user(user_name, user_config, users_config)
         else:
-            # Запускаем команду build если есть
-            if isinstance(element_data, dict) and 'build' in element_data:
-                build_cmd = element_data['build']
-                print(f"Running build command for {element}: {build_cmd}")
-                returncode, stdout, stderr = run_shell_command(build_cmd)
-                if returncode != 0:
-                    print(f"Warning: Build command failed for {element}: {stderr}")
-
-def stow_disabler(elements):
-    """Отключает элементы с помощью stow"""
-    for element, element_data in elements.items():
-        returncode, stdout, stderr = run_shell_command(f"stow -D {shlex.quote(element)}")
+            self._update_user(user_name, user_config, users_config)
+    
+    def _create_user(self, user_name: str, user_config: Dict[str, Any],
+                    users_config: Dict[str, Any]):
+        """Создает нового пользователя"""
+        create_config = users_config.get('create', {})
+        command = create_config.get('command')
+        
+        if not command:
+            self.log_error(f"Команда создания пользователя не определена")
+            return
+        
+        shell = user_config.get('shell', '/bin/bash')
+        command = command.replace('%user%', user_name).replace('%shell%', shell)
+        
+        self.add_dry_run_op(
+            Operation.CREATE,
+            f"Пользователь: {user_name}",
+            command
+        )
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Создание пользователя: {user_name}")
+        returncode, stdout, stderr = self.run_command(command)
+        
         if returncode != 0:
-            print(f"Warning: Failed to disable {element}: {stderr}")
+            self.log_error(f"Не удалось создать пользователя {user_name}: {stderr}")
+            return
+        
+        # Добавляем пользователя в группы
+        groups = user_config.get('groups', [])
+        for group in groups:
+            self._add_user_to_group(user_name, group, users_config)
+        
+        # Разблокируем пользователя если нужно
+        if not user_config.get('lock', False):
+            self._unlock_user(user_name, users_config)
+        else:
+            self._lock_user(user_name, users_config)
+    
+    def _update_user(self, user_name: str, user_config: Dict[str, Any],
+                    users_config: Dict[str, Any]):
+        """Обновляет существующего пользователя"""
+        # Обновляем shell
+        if 'shell' in user_config:
+            self._modify_user_shell(user_name, user_config['shell'], users_config)
+        
+        # Обновляем домашнюю директорию
+        if 'home' in user_config:
+            self._modify_user_home(user_name, user_config['home'], users_config)
+        
+        # Управляем блокировкой
+        should_be_locked = user_config.get('lock', False)
+        current_groups = set(self._get_user_groups(user_name, users_config))
+        
+        # Проверяем группы
+        required_groups = set(user_config.get('groups', []))
+        for group in required_groups:
+            if group not in current_groups:
+                self._add_user_to_group(user_name, group, users_config)
+        
+        # Удаляем лишние группы (опционально)
+        # groups_to_remove = current_groups - required_groups
+        # for group in groups_to_remove:
+        #     if group not in ['users', user_name]:  # Не удаляем стандартные группы
+        #         self._remove_user_from_group(user_name, group, users_config)
+    
+    def _delete_user(self, user_name: str, user_config: Dict[str, Any],
+                    users_config: Dict[str, Any]):
+        """Удаляет пользователя"""
+        if not self._check_user_exists(user_name, users_config):
+            return
+        
+        delete_config = users_config.get('delete', {})
+        keep_home = user_config.get('keep_home', False)
+        
+        command = delete_config.get('keep_home' if keep_home else 'command')
+        if not command:
+            return
+        
+        command = command.replace('%user%', user_name)
+        self.add_dry_run_op(
+            Operation.DELETE,
+            f"Пользователь: {user_name}",
+            command
+        )
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Удаление пользователя: {user_name}")
+        returncode, stdout, stderr = self.run_command(command)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось удалить пользователя {user_name}: {stderr}")
+    
+    def _modify_user_shell(self, user_name: str, shell: str,
+                          users_config: Dict[str, Any]):
+        """Изменяет shell пользователя"""
+        modify_config = users_config.get('modify', {})
+        command = modify_config.get('shell')
+        
+        if not command:
+            return
+        
+        command = command.replace('%user%', user_name).replace('%shell%', shell)
+        self.add_dry_run_op(
+            Operation.MODIFY,
+            f"Shell пользователя {user_name}: {shell}",
+            command
+        )
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Изменение shell пользователя {user_name}: {shell}")
+        returncode, stdout, stderr = self.run_command(command)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось изменить shell пользователя {user_name}: {stderr}")
+    
+    def _modify_user_home(self, user_name: str, home: str,
+                         users_config: Dict[str, Any]):
+        """Изменяет домашнюю директорию пользователя"""
+        modify_config = users_config.get('modify', {})
+        command = modify_config.get('home')
+        
+        if not command:
+            return
+        
+        command = command.replace('%user%', user_name).replace('%home%', home)
+        self.add_dry_run_op(
+            Operation.MODIFY,
+            f"Домашняя директория пользователя {user_name}: {home}",
+            command
+        )
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Изменение домашней директории пользователя {user_name}: {home}")
+        returncode, stdout, stderr = self.run_command(command)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось изменить домашнюю директорию пользователя {user_name}: {stderr}")
+    
+    def _add_user_to_group(self, user_name: str, group: str,
+                          users_config: Dict[str, Any]):
+        """Добавляет пользователя в группу"""
+        if self._check_user_in_group(user_name, group, users_config):
+            return
+        
+        groups_config = users_config.get('groups', {})
+        command = groups_config.get('add')
+        
+        if not command:
+            return
+        
+        command = command.replace('%user%', user_name).replace('%group%', group)
+        self.add_dry_run_op(
+            Operation.MODIFY,
+            f"Добавление пользователя {user_name} в группу: {group}",
+            command
+        )
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Добавление пользователя {user_name} в группу: {group}")
+        returncode, stdout, stderr = self.run_command(command)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось добавить пользователя {user_name} в группу {group}: {stderr}")
+    
+    def _remove_user_from_group(self, user_name: str, group: str,
+                               users_config: Dict[str, Any]):
+        """Удаляет пользователя из группы"""
+        if not self._check_user_in_group(user_name, group, users_config):
+            return
+        
+        groups_config = users_config.get('groups', {})
+        command = groups_config.get('remove')
+        
+        if not command:
+            return
+        
+        command = command.replace('%user%', user_name).replace('%group%', group)
+        self.add_dry_run_op(
+            Operation.MODIFY,
+            f"Удаление пользователя {user_name} из группы: {group}",
+            command
+        )
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Удаление пользователя {user_name} из группы: {group}")
+        returncode, stdout, stderr = self.run_command(command)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось удалить пользователя {user_name} из группы {group}: {stderr}")
+    
+    def _lock_user(self, user_name: str, users_config: Dict[str, Any]):
+        """Блокирует пользователя"""
+        modify_config = users_config.get('modify', {})
+        command = modify_config.get('lock')
+        
+        if not command:
+            return
+        
+        command = command.replace('%user%', user_name)
+        self.add_dry_run_op(
+            Operation.MODIFY,
+            f"Блокировка пользователя: {user_name}",
+            command
+        )
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Блокировка пользователя: {user_name}")
+        returncode, stdout, stderr = self.run_command(command)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось заблокировать пользователя {user_name}: {stderr}")
+    
+    def _unlock_user(self, user_name: str, users_config: Dict[str, Any]):
+        """Разблокирует пользователя"""
+        modify_config = users_config.get('modify', {})
+        command = modify_config.get('unlock')
+        
+        if not command:
+            return
+        
+        command = command.replace('%user%', user_name)
+        self.add_dry_run_op(
+            Operation.MODIFY,
+            f"Разблокировка пользователя: {user_name}",
+            command
+        )
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"Разблокировка пользователя: {user_name}")
+        returncode, stdout, stderr = self.run_command(command)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось разблокировать пользователя {user_name}: {stderr}")
+    
+    # ========== Управление системными настройками ==========
+    
+    def manage_system(self):
+        """Управляет системными настройками"""
+        if 'system' not in self.config:
+            self.log_info("Системные настройки не определены в конфиге")
+            return
+        
+        distro_config = self.get_current_distro_config()
+        if not distro_config:
+            return
+        
+        system_config = distro_config.get('system', {})
+        if not system_config:
+            self.log_warning("Конфигурация системы не найдена для дистрибутива")
+            return
+        
+        self.log_info("Управление системными настройками")
+        config_system = self.config.get('system', {})
+        
+        for setting, value in config_system.items():
+            if setting in system_config:
+                self._manage_system_setting(setting, value, system_config[setting])
+    
+    def _manage_system_setting(self, setting: str, desired_value: str,
+                              setting_config: Dict[str, Any]):
+        """Управляет отдельной системной настройкой"""
+        # Получаем текущее значение
+        get_cmd = setting_config.get('get')
+        if not get_cmd:
+            return
+        
+        returncode, current_value, stderr = self.run_command(get_cmd)
+        if returncode != 0:
+            self.log_error(f"Не удалось получить значение {setting}: {stderr}")
+            return
+        
+        current_value = current_value.strip()
+        
+        # Если значение уже правильное, ничего не делаем
+        if current_value == desired_value:
+            return
+        
+        # Устанавливаем новое значение
+        set_cmd = setting_config.get('set')
+        if not set_cmd:
+            return
+        
+        set_cmd = set_cmd.replace('%value%', desired_value)
+        self.add_dry_run_op(
+            Operation.SET,
+            f"{setting}: {current_value} → {desired_value}",
+            set_cmd
+        )
+        
+        if self.dry_run:
+            return
+        
+        self.log_change(f"{setting}: {current_value} → {desired_value}")
+        returncode, stdout, stderr = self.run_command(set_cmd)
+        
+        if returncode != 0:
+            self.log_error(f"Не удалось установить {setting}: {stderr}")
+    
+    # ========== Основные методы выполнения ==========
+    
+    def configure_all(self):
+        """Выполняет полную конфигурацию системы"""
+        if not self.load_config():
+            return
+        
+        if self.dry_run:
+            print("\n" + "="*60)
+            print("РЕЖИМ ПРОСМОТРА (DRY RUN)")
+            print("Следующие изменения будут выполнены:")
+            print("="*60 + "\n")
+        
+        self.manage_packages()
+        self.manage_services()
+        self.manage_system()
+        self.manage_users()
+        self.manage_extra_packages()
+        self.manage_stow()
+        
+        if self.dry_run:
+            self._show_dry_run_summary()
+        else:
+            print("\n" + "="*60)
+            print("КОНФИГУРАЦИЯ ЗАВЕРШЕНА")
+            print("="*60)
+    
+    def uninstall(self):
+        """Отключает конфигурации и останавливает сервисы"""
+        if not self.load_config():
+            return
+        
+        if self.dry_run:
+            print("\n" + "="*60)
+            print("РЕЖИМ ПРОСМОТРА (DRY RUN)")
+            print("Следующие изменения будут выполнены при удалении:")
+            print("="*60 + "\n")
+        
+        self.uninstall_stow()
+        self.manage_services()  # Это отключит и остановит сервисы
+        
+        if self.dry_run:
+            self._show_dry_run_summary()
+        else:
+            print("\n" + "="*60)
+            print("УДАЛЕНИЕ ЗАВЕРШЕНО")
+            print("="*60)
+    
+    def remove_all(self):
+        """Полное удаление: пакеты, файлы, сервисы, конфигурации"""
+        if not self.load_config():
+            return
+        
+        if self.dry_run:
+            print("\n" + "="*60)
+            print("РЕЖИМ ПРОСМОТРА (DRY RUN)")
+            print("Следующие изменения будут выполнены при полном удалении:")
+            print("="*60 + "\n")
+        
+        self.uninstall_stow()
+        self.uninstall_extra_packages()
+        self.manage_packages()
+        self.manage_services()
+        
+        if self.dry_run:
+            self._show_dry_run_summary()
+        else:
+            print("\n" + "="*60)
+            print("ПОЛНОЕ УДАЛЕНИЕ ЗАВЕРШЕНО")
+            print("="*60)
+    
+    def _show_dry_run_summary(self):
+        """Показывает сводку dry-run операций"""
+        if not self.dry_run_ops:
+            print("Никаких изменений не требуется.")
+            return
+        
+        print("\n" + "="*60)
+        print("СВОДКА ИЗМЕНЕНИЙ:")
+        print("="*60)
+        
+        ops_by_type = {}
+        for op in self.dry_run_ops:
+            ops_by_type.setdefault(op.op, []).append(op)
+        
+        for op_type, ops in ops_by_type.items():
+            print(f"\n{op_type.value} ({len(ops)}):")
+            for op in ops:
+                print(f"  • {op.description}")
+                if op.command:
+                    print(f"    Команда: {op.command}")
+        
+        print("\n" + "="*60)
+        print(f"Всего операций: {len(self.dry_run_ops)}")
+        print("="*60)
+
 
 def show_help():
-    """Показывает справку по использованию"""
-    help_text = """Usage:
-  python3 script.py          - Install/configure packages, services and dependencies
-  python3 script.py packages - Manage only package dependencies (install/remove)
-  python3 script.py services - Manage only services (enable/disable, start/stop)
-  python3 script.py stow     - Manage only stow configurations
-  python3 script.py uninstall - Disable stow configs and stop services
-  python3 script.py remove    - Disable stow configs, remove extra files, packages and stop services
-  python3 script.py help      - Show this help
+    """Показывает справку"""
+    help_text = """Использование:
+  python3 script.py                 - Полная конфигурация системы
+  python3 script.py --dry-run       - Показать что будет изменено
+  python3 script.py packages        - Управление только пакетами
+  python3 script.py services        - Управление только сервисами
+  python3 script.py system          - Управление только системными настройками
+  python3 script.py users           - Управление только пользователями
+  python3 script.py stow            - Управление только конфигурациями stow
+  python3 script.py uninstall       - Отключение stow и сервисов
+  python3 script.py remove          - Полное удаление (stow, файлы, пакеты, сервисы)
+  python3 script.py help            - Показать эту справку
 
-This script expects config.json in the current working directory.
+Параметры:
+  --dry-run, -d    Режим просмотра (не выполнять команды)
+
+Скрипт ожидает config.json в текущей рабочей директории.
 """
     print(help_text)
 
+
 def main():
-    # Определяем путь к config.json в текущей рабочей директории
-    config_path = 'config.json'
+    if len(sys.argv) >= 2 and sys.argv[1] in ['help', '--help', '-h']:
+        show_help()
+        sys.exit(0)
     
-    # Загружаем основной конфиг
-    try:
-        with open(config_path, 'r') as f:
-            main_config = json.load(f)
-    except (json.JSONDecodeError, IOError) as e:
-        print(f"Error: Invalid JSON or cannot read {config_path}: {e}")
-        print(f"Current directory: {os.getcwd()}")
+    # Проверяем наличие флага --dry-run
+    dry_run = '--dry-run' in sys.argv or '-d' in sys.argv
+    args = [arg for arg in sys.argv[1:] if arg not in ['--dry-run', '-d']]
+    
+    configurator = SystemConfigurator(dry_run=dry_run)
+    
+    if len(args) == 0:
+        # Полная конфигурация
+        configurator.configure_all()
+    elif args[0] == 'packages':
+        if configurator.load_config():
+            configurator.manage_packages()
+            if dry_run:
+                configurator._show_dry_run_summary()
+    elif args[0] == 'services':
+        if configurator.load_config():
+            configurator.manage_services()
+            if dry_run:
+                configurator._show_dry_run_summary()
+    elif args[0] == 'system':
+        if configurator.load_config():
+            configurator.manage_system()
+            if dry_run:
+                configurator._show_dry_run_summary()
+    elif args[0] == 'users':
+        if configurator.load_config():
+            configurator.manage_users()
+            if dry_run:
+                configurator._show_dry_run_summary()
+    elif args[0] == 'stow':
+        if configurator.load_config():
+            configurator.manage_stow()
+            if dry_run:
+                configurator._show_dry_run_summary()
+    elif args[0] == 'uninstall':
+        configurator.uninstall()
+    elif args[0] == 'remove':
+        configurator.remove_all()
+    else:
+        print(f"Неизвестная команда: {args[0]}")
+        show_help()
         sys.exit(1)
-    
-    # Рекурсивно обрабатываем инклюды
-    config = load_config_recursive(main_config, os.path.dirname(config_path))
-    
-    # Обработка аргументов командной строки
-    if len(sys.argv) >= 2:
-        if sys.argv[1] == 'packages':
-            print("Managing packages only...")
-            manage_packages(config)
-            sys.exit(0)
-        
-        if sys.argv[1] == 'services':
-            print("Managing services only...")
-            manage_services(config)
-            sys.exit(0)
-        
-        if sys.argv[1] == 'stow':
-            print("Managing stow configurations only...")
-            if 'WM' in config:
-                stow_enabler(config['WM'])
-            if 'PKGS' in config:
-                stow_enabler(config['PKGS'])
-            sys.exit(0)
-        
-        if sys.argv[1] == 'uninstall':
-            print("Uninstalling packages and stopping services...")
-            # Отключаем stow конфигурации
-            if 'WM' in config:
-                stow_disabler(config['WM'])
-            if 'PKGS' in config:
-                stow_disabler(config['PKGS'])
-            
-            # Останавливаем и отключаем сервисы
-            manage_services(config)
-            sys.exit(0)
-        
-        if sys.argv[1] == 'remove':
-            print("Removing packages, extra files, stopping services and uninstalling...")
-            # Сначала отключаем все stow конфигурации
-            if 'WM' in config:
-                stow_disabler(config['WM'])
-            if 'PKGS' in config:
-                stow_disabler(config['PKGS'])
-            
-            # Удаляем лишние файлы
-            uninstall_extra_pkgs(config)
-            
-            # Управляем пакетами и сервисами
-            manage_packages(config)
-            manage_services(config)
-            sys.exit(0)
-        
-        if sys.argv[1] in ['help', '--help', '-h']:
-            show_help()
-            sys.exit(0)
-    
-    print("Starting full system configuration...")
-    
-    # 1. Управляем пакетами из dependencies
-    manage_packages(config)
-    
-    # 2. Управляем сервисами
-    manage_services(config)
-    
-    # 3. Клонируем дополнительные пакеты
-    if 'extraPkgs' in config:
-        clone_extra_pkgs(config['extraPkgs'])
-    
-    # 4. Включаем конфигурации через stow
-    if 'WM' in config:
-        stow_enabler(config['WM'])
-    
-    if 'PKGS' in config:
-        stow_enabler(config['PKGS'])
-    
-    print("Configuration completed!")
+
 
 if __name__ == '__main__':
     main()
