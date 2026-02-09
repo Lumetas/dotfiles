@@ -63,6 +63,12 @@
 				"check": "id %user% | grep -q '%group%' && echo 1",
 				"list": "id -nG %user%"
 			}
+		},
+		"groups": {
+			"exists": "getent group %group% > /dev/null 2>&1 && echo 1",
+			"create": "sudo groupadd %group%",
+			"delete": "sudo groupdel %group%",
+			"list": "getent group"
 		}
 	}
 }

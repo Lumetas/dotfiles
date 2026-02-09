@@ -3,7 +3,25 @@
 	"currentDistro": "fedora",
 	"extraPkgs": {
 		"dwm/dwm": "git@github.com:Lumetas/dwm.git",
-		"nvim/.config/nvim": "git@github.com:Lumetas/nvim-cfg.git"
+		"nvim/.config/nvim": "git@github.com:Lumetas/nvim-cfg.git",
+		"nviminstaller/nvim" : {
+			"type": "file",
+			"url" : "https://github.com/neovim/neovim/releases/download/nightly/nvim-linux64.tar.gz",
+			"build" : [
+				"cd ~/nviminstaller/nvim",
+				"tar -xvf nvim-linux64.tar.gz",
+				"rm nvim-linux64.tar.gz",
+				"mv nvim-linux64 nvim",
+				"chmod +x nvim/bin/nvim"
+			]
+		},
+		"kitty/.config/kitty" : {
+			"type": "git",
+			"url" : "https://github.com/kovidgoyal/kitty.git",
+			"build" : [
+				"cd ~/kitty",
+				"make clean install"
+			]
 	},
 	"WM": {
 		"dwm": {
@@ -58,6 +76,16 @@
 			],
 			"enabled": true,
 			"lock": false
+		}
+	],
+	"groups": [
+		{
+			"name": "lum",
+			"active": true
+		},
+		{
+			"name": "wheel",
+			"active": true
 		}
 	]
 }
