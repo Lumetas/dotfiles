@@ -1,0 +1,80 @@
+/**
+ * ROFI Color theme
+ * User: lumetas 
+ * Цветовая схема как в dwm config.h
+ */
+
+* {
+    background-color:      #0C0B15;    /* col_bar_bg - фон бара */
+    border-color:          #d6b8a1;    /* col_bar_inactive - неактивная граница */
+    text-color:           #d6b8a1;    /* col_text_normal - светло-бежевый текст */
+    font:            "Times New Roman 12";
+}
+
+window {
+    anchor:     north;
+    location:   north;
+    width:      100%;
+    padding:    0px;
+    background-color: #00000000;         /* col_bar_bg */
+    border-color: #5A5775;             /* col_bar_inactive */
+    children:   [ horibox ];
+}
+
+horibox {
+	background-color: #051b35;
+    orientation: horizontal;
+    children:   [ entry, listview ];
+}
+
+listview {
+    layout:     horizontal;
+    spacing:    5px;
+    lines:      100;
+    background-color: #00000000;         /* col_bar_bg */
+}
+
+entry {
+    expand:     false;
+    width:      10em;
+    background-color: #00000000;         /* col_dark0 */
+    text-color: #d6b8a1;               /* col_text_normal */
+    border-color: #246f8b;             /* col_text_dim - тусклая граница */
+}
+
+element {
+    padding: 0px 2px;
+    background-color: #00000000;         /* col_dark1 - фон неактивных элементов */
+    text-color: #d6b8a1;               /* col_text_normal */
+    border-color: #246f8b;             /* col_text_dim */
+}
+
+element selected {
+    background-color: #0e4466;         /* col_dark1 - фон как у неактивных */
+    text-color: #ffffff;               /* col_text_selected - белый текст */
+    border-color: #E0B0FF;             /* col_bar_active - лавандовая граница для активных */
+}
+
+element-text, element-icon {
+    background-color: inherit;
+    text-color: inherit;
+}
+
+/* Дополнительные состояния */
+element urgent {
+    background-color: #0e4466;         /* col_dark1 */
+    text-color: #FF6B8B;               /* col_bar_urgent - розовый текст для срочных */
+    border-color: #FF6B8B;             /* col_bar_urgent */
+}
+
+element active {
+    background-color: #1d5e72;         /* col_dark2 */
+    text-color: #E0B0FF;               /* col_bar_active - лавандовый текст */
+    border-color: #E0B0FF;             /* col_bar_active */
+}
+
+/* Состояние prompt */
+prompt {
+    background-color: #051b35;         /* col_dark0 */
+    text-color: #d6b8a1;               /* col_text_normal */
+}
