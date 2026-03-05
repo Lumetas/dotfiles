@@ -22,6 +22,7 @@
 				"cd ~/kitty",
 				"make clean install"
 			]
+		}
 	},
 	"WM": {
 		"dwm": {
@@ -44,7 +45,8 @@
 		},
 		"wallpapers": {
 			"active": true
-		}
+		},
+		"tmux": { "active": true }
 	},
 	"dependencies": "@include:deps.json",
 	"services": {
@@ -89,4 +91,3 @@
 		}
 	]
 }
-
