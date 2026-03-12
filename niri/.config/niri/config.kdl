@@ -29,7 +29,7 @@ input {
     touchpad {
         // off
         tap
-        // dwt
+        dwt
         // dwtp
         // drag false
         // drag-lock
@@ -177,41 +177,6 @@ layout {
     }
 
     // You can enable drop shadows for windows.
-    shadow {
-        // Uncomment the next line to enable shadows.
-        off
-
-        // By default, the shadow draws only around its window, and not behind it.
-        // Uncomment this setting to make the shadow draw behind its window.
-        //
-        // Note that niri has no way of knowing about the CSD window corner
-        // radius. It has to assume that windows have square corners, leading to
-        // shadow artifacts inside the CSD rounded corners. This setting fixes
-        // those artifacts.
-        //
-        // However, instead you may want to set prefer-no-csd and/or
-        // geometry-corner-radius. Then, niri will know the corner radius and
-        // draw the shadow correctly, without having to draw it behind the
-        // window. These will also remove client-side shadows if the window
-        // draws any.
-        //
-        // draw-behind-window true
-
-        // You can change how shadows look. The values below are in logical
-        // pixels and match the CSS box-shadow properties.
-
-        // Softness controls the shadow blur radius.
-        softness 30
-
-        // Spread expands the shadow.
-        spread 5
-
-        // Offset moves the shadow relative to the window.
-        offset x=0 y=5
-
-        // You can also change the shadow color and opacity.
-        color "#0007"
-    }
 
     // Struts shrink the area occupied by windows, similarly to layer-shell panels.
     // You can think of them as a kind of outer gaps. They are set in logical pixels.
@@ -339,23 +304,23 @@ binds {
     // Use spawn-sh to run a shell command. Do this if you need pipes, multiple commands, etc.
     // Note: the entire command goes as a single argument. It's passed verbatim to `sh -c`.
     // For example, this is a standard bind to toggle the screen reader (orca).
-    Super+Alt+S allow-when-locked=true hotkey-overlay-title=null { spawn-sh "pkill orca || exec orca"; }
+    // Super+Alt+S allow-when-locked=true hotkey-overlay-title=null { spawn-sh "pkill orca || exec orca"; }
 
     // Example volume keys mappings for PipeWire & WirePlumber.
     // The allow-when-locked=true property makes them work even when the session is locked.
     // Using spawn-sh allows to pass multiple arguments together with the command.
     // "-l 1.0" limits the volume to 100%.
-    XF86AudioRaiseVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.1+ -l 1.0"; }
-    XF86AudioLowerVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.1-"; }
-    XF86AudioMute        allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"; }
-    XF86AudioMicMute     allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"; }
-
-    // Example media keys mapping using playerctl.
-    // This will work with any MPRIS-enabled media player.
-    XF86AudioPlay        allow-when-locked=true { spawn-sh "playerctl play-pause"; }
-    XF86AudioStop        allow-when-locked=true { spawn-sh "playerctl stop"; }
-    XF86AudioPrev        allow-when-locked=true { spawn-sh "playerctl previous"; }
-    XF86AudioNext        allow-when-locked=true { spawn-sh "playerctl next"; }
+    // XF86AudioRaiseVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.1+ -l 1.0"; }
+    // XF86AudioLowerVolume allow-when-locked=true { spawn-sh "wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.1-"; }
+    // XF86AudioMute        allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"; }
+    // XF86AudioMicMute     allow-when-locked=true { spawn-sh "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"; }
+    //
+    // // Example media keys mapping using playerctl.
+    // // This will work with any MPRIS-enabled media player.
+    // XF86AudioPlay        allow-when-locked=true { spawn-sh "playerctl play-pause"; }
+    // XF86AudioStop        allow-when-locked=true { spawn-sh "playerctl stop"; }
+    // XF86AudioPrev        allow-when-locked=true { spawn-sh "playerctl previous"; }
+    // XF86AudioNext        allow-when-locked=true { spawn-sh "playerctl next"; }
 
     // Example brightness key mappings for brightnessctl.
     // You can use regular spawn with multiple arguments too (to avoid going through "sh"),
@@ -365,7 +330,7 @@ binds {
 
 
 	Mod+P { spawn "bash" "-c" "grim -g \"$(slurp -d)\" - | wl-copy"; }
-	Mod+U { spawn "bash" "-c" "~/apps/zen/zen"; }
+	Mod+U { spawn "bash" "-c" "firefox-esr"; }
 
 // Пример конфигурации для 4 рабочих столов
     // Open/close the Overview: a zoomed-out view of workspaces and windows.
@@ -409,8 +374,11 @@ binds {
     Mod+Shift+Down  { focus-monitor-down; }
     Mod+Shift+Up    { focus-monitor-up; }
     Mod+Shift+Right { focus-monitor-right; }
-    Mod+Shift+H     { focus-monitor-left; }
-    Mod+Shift+L     { focus-monitor-right; }
+
+    Mod+Shift+H {consume-or-expel-window-left;} 
+    Mod+Shift+L { consume-or-expel-window-right; }
+    Mod+Shift+J {expel-window-from-column;}
+    // Mod+Shift+H { consume-or-expel-window-left; }
 
     Mod+Shift+Ctrl+Left  { move-column-to-monitor-left; }
     Mod+Shift+Ctrl+Down  { move-column-to-monitor-down; }
