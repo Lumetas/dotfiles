@@ -31,7 +31,8 @@
 		},
 		"hyprland": {
 			"active": false
-		}
+		},
+		'niri": { "active": true }
 	},
 	"PKGS": {
 		"fish": {

@@ -14,7 +14,6 @@ if status is-interactive
 	alias gpumine="__NV_PRIME_RENDER_OFFLOAD=1 flatpak run io.mrarm.mcpelauncher > /dev/null & watch nvidia-smi"
 	alias l="ls -la"
 	alias n="nvim-test"
-	alias md="inlyne -t dark"
 	alias nvim-test='NVIM_APPNAME="nvim-test" nvim'
 	alias lazyvim='NVIM_APPNAME="lazyvim" nvim'
 	alias lazyvide='NVIM_APPNAME="lazyvim" nvide'
@@ -23,6 +22,25 @@ if status is-interactive
 	set -U fish_greeting
 	source ~/.config/fish/fprompt.fish
 end
+
+if status --is-login
+    if test -z "$DISPLAY" -a "$XDG_VTNR" = 1
+        exec startx -- -keeptty
+		# exec niri-session -l
+    end
+end
+
+
+# if status --is-login
+#     if test -z "$DISPLAY" -a "$XDG_VTNR" = 1
+#         # Проверяем наличие устройства Mercucys по ID
+#         # if lsusb | grep -q "2c4e:0102"
+# 		exec startx -- -keeptty
+# 			#      else
+# 			# pkill fish
+# 			#      end
+#     end
+# end
 
 # opencode
 fish_add_path /home/lum/.opencode/bin

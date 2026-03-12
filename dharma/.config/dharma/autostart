@@ -1,0 +1,29 @@
+#!/bin/bash
+# Функция для запуска программы, если она не запущена
+run_if_not_running() {
+    local program="$1"
+    local process_name="$2"
+    
+    if ! pgrep -f "$process_name" > /dev/null; then
+        echo "Запускаем: $program"
+        eval "$program" &
+    else
+        echo "Программа $process_name уже запущена"
+    fi
+}
+
+# Запускаем каждую программу с проверкой
+run_if_not_running "dunst" "dunst"
+run_if_not_running "picom --backend glx" "picom.*--backend glx"
+run_if_not_running "feh --bg-scale ~/.wallpapers/bg1.jpg" "feh.*bg1.jpg"
+run_if_not_running "sudo chown lum /sys/class/leds/smc::kbd_backlight/brightness" "chown.*brightness"
+
+# Для цикла используем отдельную проверку
+if ! pgrep -f "dmenu_app_list.*sleep 460" > /dev/null; then
+    ( while true; do dmenu_app_list -u && sleep 460; done) &
+fi
+
+run_if_not_running "xss-lock ~/dwm/lock" "xss-lock.*lock"
+run_if_not_running "sleep 2 && setxkbmap -option 'ctrl:nocaps' ; setxkbmap 'us,ru' ',winkeys' 'grp:win_space_toggle'" "setxkbmap.*grp:win_space_toggle"
+run_if_not_running "xset r rate 200 50" "xset.*rate"
+run_if_not_running "polybar" "polybar"
