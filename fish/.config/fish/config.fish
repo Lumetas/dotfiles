@@ -10,6 +10,7 @@ if status is-interactive
 	alias fep="/home/lum/fep/fep"
 	alias otdrestart="systemctl --user restart opentabletdriver"
 	eval $(fzf --fish)
+	alias tm="tmux attach -t main || tmux new -s main"
 	alias ls=lsd
 	alias gpumine="__NV_PRIME_RENDER_OFFLOAD=1 flatpak run io.mrarm.mcpelauncher > /dev/null & watch nvidia-smi"
 	alias l="ls -la"
