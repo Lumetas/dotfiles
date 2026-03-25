@@ -1,0 +1,1 @@
+/home/lum/dotfiles/dwm/dwm/config.h
