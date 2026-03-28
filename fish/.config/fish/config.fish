@@ -22,6 +22,7 @@ if status is-interactive
 	export EDITOR=nvim
 	set -U fish_greeting
 	source ~/.config/fish/fprompt.fish
+	alias gl="ssh git@lumetas.ru"
 end
 
 if status --is-login
