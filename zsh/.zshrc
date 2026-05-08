@@ -50,9 +50,9 @@ alias ...='cd ../..'
 alias md='mkdir -p'
 alias rd='rmdir'
 alias path='echo -e ${PATH//:/\\n}'
-alias myip='curl -s ifconfig.me'
-alias ports='netstat -tulanp 2>/dev/null | grep LISTEN'
-alias fucking='sudo $(fc -ln -1)'   # исправляет последнюю команду
+alias myip='curl -s 2ip.ru'
+alias ports='__get_ports__'
+alias fuck='sudo $(fc -ln -1)'   # исправляет последнюю команду
 
 alias g='git'
 alias gs='git status -sb'
@@ -71,6 +71,16 @@ if command -v batcat &> /dev/null; then
 elif command -v bat &> /dev/null; then
     alias cat='bat'
 fi
+
+function __get_ports__() {
+	if [[ "$1" == "-a" ]]; then
+		ss -tulpn 2>/dev/null | awk 'NR>1 {split($5,a,":"); port=a[length(a)]; pid=gensub(/.*pid=([0-9]+),.*/,"\\1","g",$7); proc=gensub(/.*users:\(\("([^"]+)".*/,"\\1","g",$7); printf "%-8s %-8s %s\n", port, (pid~/^[0-9]+$/ ? pid : "N/A"), (proc?proc:"N/A")}' | sort -n | uniq
+	elif [[ "$1" == "-j" ]]; then
+		ss -tulpn 2>/dev/null | awk 'NR>1 {split($5,a,":"); port=a[length(a)]; pid=gensub(/.*pid=([0-9]+),.*/,"\\1","g",$7); proc=gensub(/.*users:\(\("([^"]+)".*/,"\\1","g",$7); if(proc!="") print "{\"port\":"port",\"pid\":"(pid~/[0-9]+/?pid:"null")",\"process\":\""proc"\"}"}' | sort -n | uniq | jq -s '.'
+	else
+		ss -tulpn 2>/dev/null | awk 'NR>1 {split($5,a,":"); print a[length(a)]}' | sort -n | uniq
+	fi
+}
 setopt PROMPT_SUBST
 autoload -U colors && colors
 bindkey '^?' backward-delete-char
