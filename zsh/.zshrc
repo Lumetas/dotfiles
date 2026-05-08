@@ -21,7 +21,6 @@ setopt EXTENDED_GLOB
 setopt GLOB_DOTS                  # скрытые файлы в глобах
 export LS_COLORS='fi=0:di=01;34:ex=01;32:ln=01;36:*.tar=01;31:*.zip=01;31'
 
-zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 autoload -Uz compinit && compinit -u
 zstyle ':completion:*' menu select=2
 zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
@@ -40,7 +39,6 @@ alias gpumine="__NV_PRIME_RENDER_OFFLOAD=1 flatpak run io.mrarm.mcpelauncher > /
 alias ls='lsd'
 export PATH="$PATH:$HOME/.config/composer/vendor/bin:/home/lum/.local/bin"
 export TERM=xterm-256color
-alias ls='ls --color=auto -h'
 alias ez='nvim ~/.zshrc'
 alias ll='ls -la'
 alias la='ls -A'
