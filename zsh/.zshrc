@@ -1,4 +1,3 @@
-
 alias -g ...='../..'
 alias -g ....='../../..'
 alias -g .....='../../../..'
@@ -9,6 +8,7 @@ SAVEHIST=100000
 setopt EXTENDED_HISTORY          # timestamp + duration
 setopt HIST_EXPIRE_DUPS_FIRST
 setopt HIST_IGNORE_DUPS
+export EDITOR=nvim
 setopt HIST_IGNORE_SPACE          # команды с пробелом не в историю
 HISTFILE=~/.zsh_history
 setopt HIST_VERIFY
@@ -93,10 +93,5 @@ bindkey '^[OB' down-line-or-beginning-search
 
 
 if [[ -z "$DISPLAY" ]] && [[ "$XDG_VTNR" = "1" ]]; then
-    # Если нужно проверять наличие устройства:
-    # if lsusb | grep -q "2c4e:0102"; then
-        exec startx -- -keeptty
-    # else
-    #     pkill fish  # В Zsh будет pkill zsh
-    # fi
+	exec startx -- -keeptty
 fi
