@@ -41,6 +41,7 @@ alias ls='lsd'
 export PATH="$PATH:$HOME/.config/composer/vendor/bin:/home/lum/.local/bin"
 export TERM=xterm-256color
 alias ls='ls --color=auto -h'
+alias ez='nvim ~/.zshrc'
 alias ll='ls -la'
 alias la='ls -A'
 alias l='ls -CF'
@@ -65,6 +66,7 @@ alias gP='git push'
 alias gp='git pull'
 alias gl='git log --oneline --graph'
 alias gd='git diff'
+alias gm='git merge'
 
 if command -v batcat &> /dev/null; then
     alias cat='batcat'
@@ -78,7 +80,9 @@ bindkey '^?' backward-delete-char
 [ -f ~/.zsh_local ] && source ~/.zsh_local
 source ~/.zsh/themes/agnoster.zsh-theme
 source ~/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
-
+ZSH_HIGHLIGHT_STYLES[command]='fg=white'
+ZSH_HIGHLIGHT_STYLES[alias]='fg=white'
+ZSH_HIGHLIGHT_STYLES[builtin]='fg=white'
 
 autoload -U up-line-or-beginning-search
 autoload -U down-line-or-beginning-search
