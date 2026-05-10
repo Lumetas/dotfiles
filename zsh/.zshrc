@@ -37,7 +37,7 @@ alias otdrestart="systemctl --user restart opentabletdriver"
 alias tm="tmux attach -t main || tmux new -s main"
 alias gpumine="__NV_PRIME_RENDER_OFFLOAD=1 flatpak run io.mrarm.mcpelauncher > /dev/null & watch nvidia-smi"
 alias ls='lsd'
-export PATH="$PATH:$HOME/.config/composer/vendor/bin:/home/lum/.local/bin"
+export PATH="$PATH:$HOME/.config/composer/vendor/bin:/home/lum/.local/bin:/home/lum/.opencode/bin"
 export TERM=xterm-256color
 alias ez='nvim ~/.zshrc'
 alias ll='ls -la'
