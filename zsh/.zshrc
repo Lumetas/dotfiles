@@ -107,6 +107,6 @@ bindkey '^[OA' up-line-or-beginning-search
 bindkey '^[OB' down-line-or-beginning-search
 
 
-# if [[ -z "$DISPLAY" ]] && [[ "$XDG_VTNR" = "1" ]]; then
-# 	exec startx -- -keeptty
-# fi
+if [[ -z "$DISPLAY" ]] && [[ "$XDG_VTNR" = "1" ]]; then
+	exec startx -- -keeptty
+fi
