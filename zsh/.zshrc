@@ -54,6 +54,8 @@ alias myip='curl -s 2ip.ru'
 alias ports='__get_ports__'
 alias fuck='sudo $(fc -ln -1)'   # исправляет последнюю команду
 
+alias md='inlyne -t dark'
+
 alias g='git'
 alias gs='git status -sb'
 alias ga='git add'
@@ -105,6 +107,6 @@ bindkey '^[OA' up-line-or-beginning-search
 bindkey '^[OB' down-line-or-beginning-search
 
 
-if [[ -z "$DISPLAY" ]] && [[ "$XDG_VTNR" = "1" ]]; then
-	exec startx -- -keeptty
-fi
+# if [[ -z "$DISPLAY" ]] && [[ "$XDG_VTNR" = "1" ]]; then
+# 	exec startx -- -keeptty
+# fi
