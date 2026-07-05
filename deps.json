@@ -1,0 +1,14 @@
+{
+	"zsh": {
+		"fedora": {
+			"installed": false,
+			"name": "zsh"
+		}
+	},
+	"fish": {
+		"fedora": {
+			"installed": true,
+			"name": "fish"
+		}
+	}
+}

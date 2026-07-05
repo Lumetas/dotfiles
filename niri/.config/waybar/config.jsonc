@@ -1,0 +1,34 @@
+{
+    "height": 30,
+    "spacing": 4,
+    "modules-center": [
+        "tray",
+        "clock",
+        "battery"
+    ],
+
+    "hyprland/workspaces": {
+        "format": "{name}"
+    },
+    "hyprland/window": {
+        "format": "{initialTitle}",
+        "max-length": 50,
+        "tooltip": false
+    },
+    "battery": {
+        "states": {
+            "warning": 30,
+            "critical": 15
+        },
+        "format": "{capacity}% {icon}",
+        "format-icons": ["", "", "", "", ""],
+        "interval": 10
+    },
+    "tray": {
+        "spacing": 10
+    },
+    "clock": {
+        "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>",
+        "format-alt": "{:%Y-%m-%d}"
+    }
+}

@@ -1,0 +1,167 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Рекурсивно загружает конфигурацию, обрабатывая вложенные @include
+ */
+function loadConfigRecursive($config, $basePath = '')
+{
+    $result = [];
+    
+    foreach ($config as $key => $value) {
+        // Если значение начинается с @include:, обрабатываем как инклюд
+        if (is_string($value) && str_starts_with($value, '@include:')) {
+            $includeFile = substr($value, strlen('@include:'));
+            
+            // Если путь относительный, добавляем базовый путь
+            if ($basePath && !str_starts_with($includeFile, '/')) {
+                $includeFile = $basePath . '/' . $includeFile;
+            }
+            
+            if (!file_exists($includeFile)) {
+                echo "Warning: Include file not found: $includeFile\n";
+                continue;
+            }
+            
+            $includedConfig = json_decode(file_get_contents($includeFile), true);
+            if ($includedConfig === null) {
+                echo "Warning: Invalid JSON in include file: $includeFile\n";
+                continue;
+            }
+            
+            // Рекурсивно обрабатываем включенный конфиг
+            $result[$key] = loadConfigRecursive($includedConfig, dirname($includeFile));
+        } elseif (is_array($value)) {
+            // Рекурсивно обрабатываем вложенные массивы
+            $result[$key] = loadConfigRecursive($value, $basePath);
+        } else {
+            // Обычное значение
+            $result[$key] = $value;
+        }
+    }
+    
+    return $result;
+}
+
+function enabler($elements)
+{
+    $enabled = [];
+    foreach ($elements as $element => $elementData) {
+        if (isset($elementData['active']) && $elementData['active']) {
+            $enabled[$element] = $elementData;
+        } else {
+            shell_exec("stow -D $element");
+        }
+    }
+
+    foreach ($enabled as $element => $elementData) {
+        shell_exec("stow $element");
+        if (isset($elementData['build'])) {
+            shell_exec($elementData['build']);
+        }
+    }
+}
+
+function disabler($elements)
+{
+    foreach ($elements as $element => $elementData) {
+        shell_exec("stow -D $element");
+    }
+}
+
+function uninstallExtraPkgs($config)
+{
+    if (isset($config['extraPkgs'])) {
+        $extraPkgs = $config['extraPkgs'];
+        foreach ($extraPkgs as $path => $url) {
+            $expandedPath = expandPath($path);
+            if (file_exists($expandedPath)) {
+                echo "Removing: $expandedPath\n";
+                shell_exec("rm -rf " . escapeshellarg($expandedPath));
+            }
+        }
+    }
+}
+
+/**
+ * Расширяет пути с ~/ до домашней директории
+ */
+function expandPath($path)
+{
+    if (str_starts_with($path, '~/')) {
+        return $_SERVER['HOME'] . substr($path, 1);
+    }
+    return $path;
+}
+
+/**
+ * Клонирует дополнительные пакеты из Git
+ */
+function cloneExtraPkgs($extraPkgs)
+{
+    foreach ($extraPkgs as $path => $url) {
+        $expandedPath = expandPath($path);
+        
+        // Создаем директорию, если не существует
+        $dir = dirname($expandedPath);
+        if (!file_exists($dir)) {
+            mkdir($dir, 0755, true);
+        }
+        
+        if (!file_exists($expandedPath)) {
+            echo "Cloning: $url to $expandedPath\n";
+            shell_exec("git clone " . escapeshellarg($url) . " " . escapeshellarg($expandedPath));
+        }
+    }
+}
+
+// Загружаем основной конфиг
+$mainConfig = json_decode(file_get_contents('config.json'), true);
+if ($mainConfig === null) {
+    die("Error: Invalid JSON in config.json\n");
+}
+
+// Рекурсивно обрабатываем инклюды
+$config = loadConfigRecursive($mainConfig, dirname('config.json'));
+
+// Обработка аргументов командной строки
+if (count($argv) >= 2) {
+    if ($argv[1] == 'uninstall') {
+        echo "Uninstalling packages...\n";
+        if (isset($config['WM'])) disabler($config['WM']);
+        if (isset($config['PKGS'])) disabler($config['PKGS']);
+        exit;
+    }
+
+    if ($argv[1] == 'remove') {
+        echo "Removing packages and extra files...\n";
+        if (isset($config['WM'])) disabler($config['WM']);
+        if (isset($config['PKGS'])) disabler($config['PKGS']);
+        uninstallExtraPkgs($config);
+        exit;
+    }
+    
+    if ($argv[1] == 'help' || $argv[1] == '--help' || $argv[1] == '-h') {
+        echo "Usage:\n";
+        echo "  php script.php          - Install/configure packages\n";
+        echo "  php script.php uninstall - Disable packages\n";
+        echo "  php script.php remove    - Disable packages and remove extra files\n";
+        echo "  php script.php help      - Show this help\n";
+        exit;
+    }
+}
+
+
+// Клонируем дополнительные пакеты
+if (isset($config['extraPkgs'])) {
+    cloneExtraPkgs($config['extraPkgs']);
+}
+
+// Включаем пакеты
+if (isset($config['WM'])) {
+    enabler($config['WM']);
+}
+
+if (isset($config['PKGS'])) {
+    enabler($config['PKGS']);
+}

@@ -1,0 +1,94 @@
+{
+	"distros": "@include:distros.json",
+	"currentDistro": "fedora",
+	"extraPkgs": {
+		"dwm/dwm": "git@github.com:Lumetas/dwm.git",
+		"nvim/.config/nvim": "git@github.com:Lumetas/nvim-cfg.git",
+		"nviminstaller/nvim" : {
+			"type": "file",
+			"url" : "https://github.com/neovim/neovim/releases/download/nightly/nvim-linux64.tar.gz",
+			"build" : [
+				"cd ~/nviminstaller/nvim",
+				"tar -xvf nvim-linux64.tar.gz",
+				"rm nvim-linux64.tar.gz",
+				"mv nvim-linux64 nvim",
+				"chmod +x nvim/bin/nvim"
+			]
+		},
+		"kitty/.config/kitty" : {
+			"type": "git",
+			"url" : "https://github.com/kovidgoyal/kitty.git",
+			"build" : [
+				"cd ~/kitty",
+				"make clean install"
+			]
+		}
+	},
+	"WM": {
+		"dwm": {
+			"active": true,
+			"build": "cd ~/dwm && sudo make clean install"
+		},
+		"hyprland": {
+			"active": false
+		},
+		'niri": { "active": true }
+	},
+	"PKGS": {
+		"fish": {
+			"active": true
+		},
+		"nvim": {
+			"active": true
+		},
+		"kitty": {
+			"active": true
+		},
+		"wallpapers": {
+			"active": true
+		},
+		"tmux": { "active": true }
+	},
+	"dependencies": "@include:deps.json",
+	"services": {
+		"ssh-server": {
+			"fedora": {
+				"start": true,
+				"enable": true,
+				"name": "sshd"
+			}
+		}
+	},
+	"system": {
+		"hostname": "lumetas",
+		"timezone": "Asia/Yekaterinburg",
+		"locale": "ru_UA.UTF-8",
+		"keymap": "us"
+	},
+	"users": [
+		{
+			"name": "lum",
+			"home": "/home/lum",
+			"shell": "/bin/fish",
+			"groups": [
+				"lum",
+				"wheel",
+				"video",
+				"input",
+				"docker"
+			],
+			"enabled": true,
+			"lock": false
+		}
+	],
+	"groups": [
+		{
+			"name": "lum",
+			"active": true
+		},
+		{
+			"name": "wheel",
+			"active": true
+		}
+	]
+}

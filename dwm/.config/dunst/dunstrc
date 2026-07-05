@@ -1,0 +1,194 @@
+[global]
+    # Геометрия и позиция
+    monitor = 0
+    follow = mouse
+    geometry = "350x5-30+50"
+    indicate_hidden = yes
+    shrink = no
+    transparency = 15
+    notification_height = 0
+    separator_height = 2
+    padding = 16
+    horizontal_padding = 16
+    text_icon_padding = 10
+    frame_width = 0
+    gap_size = 0
+    
+    # Шрифты как в dwm
+    font = monospace 11
+    line_height = 0
+    
+    # Основные цвета с прозрачностью
+    background = "#051b35CC"
+    foreground = "#d6b8a1"
+    
+    # Цвета для срочных уведомлений
+    urgent_background = "#051b35CC"
+    urgent_foreground = "#a34c65"
+    urgent_frame_color = "#a34c65"
+    
+    # Цвета для низкого приоритета
+    low_background = "#051b35CC"
+    low_foreground = "#644862"
+    low_frame_color = "#644862"
+    
+    # Обычные уведомления
+    normal_background = "#051b35CC"
+    normal_foreground = "#d6b8a1"
+    normal_frame_color = "#308fad"
+    
+    # Полоса прогресса
+    progress_bar = "#53b0bc"
+    progress_bar_frame = "#246f8b"
+    progress_bar_height = 6
+    progress_bar_min_width = 150
+    progress_bar_max_width = 300
+    
+    # Поведение
+    mouse_left_click = do_action
+    mouse_middle_click = close_all
+    mouse_right_click = close_current
+    timeout = 6
+    idle_threshold = 120
+    stack_duplicates = true
+    hide_duplicate_count = false
+    show_indicators = yes
+    sticky_history = yes
+    history_length = 25
+    
+    # Выравнивание
+    alignment = left
+    show_age_threshold = 60
+    ellipsize = middle
+    ignore_newline = no
+    
+    # Иконки
+    icon_position = left
+    min_icon_size = 0
+    max_icon_size = 32
+    icon_path = /usr/share/icons/Adwaita/16x16/status:/usr/share/icons/Adwaita/16x16/devices:/usr/share/icons/Adwaita/16x16/apps
+    
+    # Внешний вид (без скруглений)
+    corner_radius = 0
+    force_xinerama = false
+    word_wrap = yes
+    format = "<b>%s</b>\n%b"
+    
+    # Dmenu для истории
+    dmenu = /usr/bin/dmenu -p "dunst:" -fn "monospace:size=13" -nb "#051b35" -nf "#d6b8a1" -sb "#308fad" -sf "#ffffff"
+    
+    # Браузер
+    browser = /usr/bin/firefox-esr
+    
+    # Скрипты
+    always_run_script = true
+    title = Dunst
+    class = Dunst
+    startup_notification = false
+    verbosity = mesg
+
+[shortcuts]
+    close = ctrl+space
+    close_all = ctrl+shift+space
+    history = ctrl+grave
+    context = ctrl+shift+period
+
+[urgency_low]
+    timeout = 4
+    foreground = "#644862"
+    background = "#051b35CC"
+    frame_color = "#644862"
+    frame_width = 0
+    format = "<span color='#644862'></span> %s\n%b"
+
+[urgency_normal]
+    timeout = 6
+    foreground = "#d6b8a1"
+    background = "#051b35CC"
+    frame_color = "#308fad"
+    frame_width = 0
+    format = "<span color='#308fad'></span> <b>%s</b>\n%b"
+
+[urgency_critical]
+    timeout = 0
+    foreground = "#ffffff"
+    background = "#051b35CC"
+    frame_color = "#a34c65"
+    frame_width = 0
+    format = "<span color='#a34c65'>⚠️</span> <b>%s</b>\n%b"
+
+# Правила для приложений
+
+[volume]
+    summary = "*volume*"
+    urgency = normal
+    format = "<span color='#53b0bc'>🔊</span> <b>Volume</b>\n%b"
+    progress_bar = true
+    progress_bar_max_value = 100
+
+[brightness]
+    summary = "*brightness*"
+    urgency = normal
+    format = "<span color='#d6b8a1'>☀️</span> <b>Brightness</b>\n%b"
+    progress_bar = true
+    progress_bar_max_value = 100
+
+[kbd_backlight]
+    summary = "*kbd*"
+    urgency = normal
+    format = "<span color='#308fad'>⌨️</span> <b>Keyboard</b>\n%b"
+    progress_bar = true
+    progress_bar_max_value = 255
+
+[playerctl]
+    summary = "*player*"
+    urgency = normal
+    format = "<span color='#53b0bc'>🎵</span> <b>Music</b>\n%b"
+    timeout = 4
+
+[battery]
+    summary = "*battery*"
+    urgency = normal
+    format = "<span color='#d6b8a1'>🔋</span> <b>Battery</b>\n%b"
+
+[battery_low]
+    summary = "*battery*"
+    urgency = critical
+    format = "<span color='#a34c65'>⚠️</span> <b>Low Battery!</b>\n%b"
+    timeout = 0
+
+[network]
+    summary = "*network*"
+    urgency = normal
+    format = "<span color='#308fad'>🌐</span> <b>Network</b>\n%b"
+
+[firefox]
+    appname = "firefox"
+    urgency = normal
+    format = "<span color='#d6b8a1'>🌍</span> <b>Firefox</b>\n%b"
+
+[discord]
+    appname = "discord"
+    urgency = normal
+    format = "<span color='#644862'>💬</span> <b>Discord</b>\n%b"
+
+[telegram]
+    appname = "telegram"
+    urgency = normal
+    format = "<span color='#308fad'>✈️</span> <b>Telegram</b>\n%b"
+
+[slack]
+    appname = "slack"
+    urgency = normal
+    format = "<span color='#53b0bc'>💼</span> <b>Slack</b>\n%b"
+
+[screenshot]
+    summary = "*flameshot*"
+    urgency = normal
+    format = "<span color='#d6b8a1'>📸</span> <b>Screenshot</b>\n%b"
+    timeout = 3
+
+# Сброс правил по умолчанию
+[default]
+    urgency = normal
+    format = "<b>%s</b>\n%b"

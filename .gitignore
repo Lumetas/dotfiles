@@ -1,0 +1,8 @@
+nvim
+dwm/dwm
+.env
+*secret*
+*password*
+*cred*
+*credential*
+**/*.lock

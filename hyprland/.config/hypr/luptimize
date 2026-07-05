@@ -1,0 +1,68 @@
+#!/bin/bash
+# Исключения (процессы, которые не нужно суспендить)
+hyprctl dispatch workspace $1
+EXCLUDE_PROCESSES=("meridius" "waybar" "hyprland" "Xwayland" "pipewire" "wireplumber")
+# EXCLUDE_PROCESSES=($*)
+
+# Функция для проверки исключений
+should_exclude() {
+    local pid=$1
+    local comm=$(ps -p $pid -o comm= 2>/dev/null)
+    
+    for exclude in "${EXCLUDE_PROCESSES[@]}"; do
+        if [[ "$comm" == *"$exclude"* ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Получаем активный воркспейс
+ACTIVE_WS=$(hyprctl activeworkspace -j | jq -r '.id')
+
+# Файл для хранения PID'ов суспенденых процессов
+SUSPENDED_PIDS_FILE="/tmp/hypr_suspended_pids_$ACTIVE_WS"
+
+# Возобновляем все ранее суспенденые процессы (если есть)
+if [[ -f "$SUSPENDED_PIDS_FILE" ]]; then
+    while read pid; do
+        if kill -CONT "$pid" 2>/dev/null; then
+            echo "Возобновлен PID: $pid"
+        fi
+    done < "$SUSPENDED_PIDS_FILE"
+    rm -f "$SUSPENDED_PIDS_FILE"
+fi
+
+# Создаем новый файл для текущих суспенденых процессов
+touch "$SUSPENDED_PIDS_FILE"
+
+# Получаем все окна и обрабатываем их
+hyprctl clients -j | jq -r '.[] | "\(.pid) \(.workspace.id)"' | while read pid workspace_id; do
+    # Пропускаем если PID некорректный
+    if [[ ! "$pid" =~ ^[0-9]+$ ]] || [[ "$pid" -eq 0 ]]; then
+        continue
+    fi
+    
+    # Пропускаем исключенные процессы
+    if should_exclude "$pid"; then
+        echo "Пропущен (исключение): PID $pid"
+        continue
+    fi
+    
+    # Если окно не на активном воркспейсе - суспендим
+    if [[ "$workspace_id" != "$ACTIVE_WS" ]]; then
+        if kill -STOP "$pid" 2>/dev/null; then
+            echo "$pid" >> "$SUSPENDED_PIDS_FILE"
+            echo "Приостановлен: PID $pid (воркспейс $workspace_id)"
+        fi
+    else
+        # Если на активном воркспейсе - убедимся что не суспенден
+        kill -CONT "$pid" 2>/dev/null
+        echo "Активен: PID $pid (воркспейс $workspace_id)"
+    fi
+done
+
+echo "Готово! Активный воркспейс: $ACTIVE_WS"
+echo "Суспенденые процессы записаны в: $SUSPENDED_PIDS_FILE"
+
+
