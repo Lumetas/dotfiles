@@ -1,0 +1,20 @@
+# hint_activation_key: A-x
+# hint2_activation_key: A-i
+# hint_oneshot_key: A-x
+# hint2_oneshot_key: A-i
+#
+
+activation_key: A-c
+
+hint_bgcolor: #000000
+hint_fgcolor: #ffffff
+hint_size: 30
+hint2_size: 25
+hint_border_radius: 3
+
+hint2_chars: sdfjklcnh
+
+normal_system_cursor: 1
+
+
+grid_keys: h l j k 
