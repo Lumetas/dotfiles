@@ -91,6 +91,8 @@ alias gp='git pull'
 alias gl='git log --oneline --graph'
 alias gd='git diff'
 alias gm='git merge'
+alias go='git checkout'
+alias gst='git stash'
 
 if command -v batcat &> /dev/null; then
     alias cat='batcat'
