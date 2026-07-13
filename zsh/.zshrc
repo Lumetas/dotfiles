@@ -68,9 +68,10 @@ function html {
 	rm $tmp;
 }
 
+alias open='xdg-open'
+
 alias grep='grep --color=auto'
 alias ..='cd ..'
-alias ...='cd ../..'
 # alias md='mkdir -p'
 alias rd='rmdir'
 alias path='echo -e ${PATH//:/\\n}'
