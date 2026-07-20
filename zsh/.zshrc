@@ -153,6 +153,21 @@ bindkey '^P' up-line-or-beginning-search
 bindkey '^N' down-line-or-beginning-search
 source ~/.zsh/plugins/c.zsh;
 
+function set_win_title_precmd() {
+    print -Pn "\e]2;[%1~] \a"
+}
+
+function set_win_title_preexec() {
+    local cmd="$1"
+    cmd=${cmd//$'\n'/ }
+    if [[ ${#cmd} -gt 100 ]]; then
+        cmd="${cmd:0:97}..."
+    fi
+    print -Pn "\e]2;[%1~] $cmd\a"
+}
+
+precmd_functions+=(set_win_title_precmd)
+preexec_functions+=(set_win_title_preexec)
 
 if [[ -z "$DISPLAY" ]] && [[ "$XDG_VTNR" = "1" ]]; then
 	exec startx -- -keeptty
