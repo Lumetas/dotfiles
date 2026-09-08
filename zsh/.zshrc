@@ -112,6 +112,21 @@ function __get_ports__() {
 	fi
 }
 
+copyimg() {
+    if [ -f "$1" ]; then
+        # Автоматически определяем MIME-тип файла (image/png, image/jpeg и т.д.)
+        local mime_type=$(file -b --mime-type "$1")
+
+        if [ "$XDG_SESSION_TYPE" = "wayland" ]; then
+            # Для Wayland: перенаправляем поток файла внутрь wl-copy
+            wl-copy --type "$mime_type" < "$1" && echo "file copied"
+        else
+            # Для X11: жестко скармливаем файл xclip через stdin
+            xclip -selection clipboard -t "$mime_type" -i "$1" && echo "file copied"
+        fi
+    fi
+}
+
 function git-init-hooks () {
 	git status > /dev/null 2>&1
 	if [ $? -ne 0 ]; then
@@ -155,6 +170,10 @@ source ~/.zsh/plugins/c.zsh;
 
 function set_win_title_precmd() {
     print -Pn "\e]2;[%1~] \a"
+}
+
+function rsvp () {
+	~/.zsh/plugins/rsvp.bash $*
 }
 
 function set_win_title_preexec() {
